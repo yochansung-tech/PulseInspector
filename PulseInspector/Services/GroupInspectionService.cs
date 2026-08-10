@@ -13,12 +13,18 @@ public sealed class GroupInspectionService
 
     public InspectionModel Train(IEnumerable<GroupData> normalGroups, double confidence = 0.999)
     {
+        ArgumentNullException.ThrowIfNull(normalGroups);
+
         var groupFeatures = normalGroups
             .Select(GetGroupFeatures)
             .ToArray();
 
-        if (groupFeatures.Length < 2)
-            throw new InvalidOperationException("At least two normal groups are required for training.");
+        // Six statistical dimensions require at least seven independent
+        // group observations for a full-rank sample covariance matrix.
+        var minimumGroups = FeatureVector.StatisticalFeatureNames.Count + 1;
+        if (groupFeatures.Length < minimumGroups)
+            throw new InvalidOperationException(
+                $"At least {minimumGroups} normal groups are required for the six-feature covariance model.");
 
         return _inspectionService.Train(groupFeatures, confidence);
     }
@@ -45,6 +51,10 @@ public sealed class GroupInspectionService
     {
         if (group.Features.Count == 0)
             throw new InvalidOperationException($"Group '{group.Id}' contains no extracted features.");
+
+        if (group.Features.Count != group.Waveforms.Count)
+            throw new InvalidOperationException(
+                $"Group '{group.Id}' has {group.Waveforms.Count} waveforms but {group.Features.Count} feature vectors.");
 
         var mean = group.MeanFeatures();
         return mean ?? throw new InvalidOperationException($"Group '{group.Id}' contains no valid features.");
