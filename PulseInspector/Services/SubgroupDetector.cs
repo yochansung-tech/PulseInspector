@@ -1,5 +1,3 @@
-using PulseInspector.Models;
-
 namespace PulseInspector.Services;
 
 public sealed class SubgroupDetectionOptions
@@ -63,13 +61,13 @@ public sealed class SubgroupDetector
 
         for (var i = 0; i < samples.Count; i++)
         {
-            var value = Math.Abs(samples[i] - baseline);
-            if (!double.IsFinite(value))
+            var excursion = Math.Abs(samples[i] - baseline);
+            if (!double.IsFinite(excursion))
                 throw new InvalidDataException("Waveform contains a non-finite sample.");
 
             if (start < 0)
             {
-                if (value >= options.StartThreshold && i - lastEnd - 1 >= options.MinimumGapSamples)
+                if (excursion >= options.StartThreshold && i - lastEnd - 1 >= options.MinimumGapSamples)
                 {
                     start = i;
                     belowCount = 0;
@@ -77,7 +75,7 @@ public sealed class SubgroupDetector
                 continue;
             }
 
-            if (value <= options.EndThreshold)
+            if (excursion <= options.EndThreshold)
             {
                 belowCount++;
                 if (belowCount >= options.EndConfirmationSamples)
@@ -116,12 +114,20 @@ public sealed class SubgroupDetector
 
     private static double EstimateBaseline(IReadOnlyList<double> samples)
     {
-        var finite = samples.Where(double.IsFinite).Select(Math.Abs).OrderBy(x => x).ToArray();
+        var finite = samples.Where(double.IsFinite).ToArray();
         if (finite.Length == 0)
             throw new InvalidDataException("Waveform contains no finite samples.");
 
+        // Estimate the baseline from the samples with the smallest absolute excursion,
+        // while retaining their signed values. This avoids turning a negative baseline
+        // into a positive number.
         var count = Math.Max(1, (int)Math.Ceiling(finite.Length * 0.10));
-        var low = finite.Take(count).ToArray();
+        var low = finite
+            .OrderBy(x => Math.Abs(x))
+            .Take(count)
+            .OrderBy(x => x)
+            .ToArray();
+
         return low[low.Length / 2];
     }
 }
