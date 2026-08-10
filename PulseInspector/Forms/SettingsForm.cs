@@ -12,8 +12,8 @@ public sealed class SettingsForm : Form
         grid.Controls.Add(new TextBox { Text = (2.56e-6 / 64).ToString("G10"), Dock = DockStyle.Fill }, 1, 0);
         grid.Controls.Add(new Label { Text = "Confidence", AutoSize = true }, 0, 1);
         grid.Controls.Add(new TextBox { Text = "0.999", Dock = DockStyle.Fill }, 1, 1);
-        grid.Controls.Add(new Label { Text = "Baseline", AutoSize = true }, 0, 2);
-        grid.Controls.Add(new Label { Text = "Median of first 10%", AutoSize = true }, 1, 2);
+        grid.Controls.Add(new Label { Text = "Baseline / Noise", AutoSize = true }, 0, 2);
+        grid.Controls.Add(new Label { Text = "Lower-amplitude portion of the waveform", AutoSize = true }, 1, 2);
         Controls.Add(grid);
     }
 }
