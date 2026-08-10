@@ -5,7 +5,7 @@ public sealed class WaveformData
     public string SourceName { get; init; } = string.Empty;
     public double[] Samples { get; init; } = Array.Empty<double>();
     public double SampleIntervalSeconds { get; init; }
-    public double MeasurementPeriodSeconds => SampleIntervalSeconds * Math.Max(0, Samples.Length - 1);
+    public double MeasurementPeriodSeconds => SampleIntervalSeconds * Samples.Length;
     public bool HasExplicitTimeAxis { get; init; }
 
     public int SampleCount => Samples.Length;
