@@ -11,20 +11,35 @@ public sealed class GroupData
     public IReadOnlyList<double[]> Waveforms => Records.Select(r => r.Samples).ToArray();
     public IReadOnlyList<FeatureVector> Features => Records.Select(r => r.Features).ToArray();
 
-    public void AddWaveform(double[] waveform, FeatureVector? features = null, string? sourceName = null)
+    public void AddWaveform(
+        double[] waveform,
+        FeatureVector? features = null,
+        string? sourceName = null,
+        double sampleIntervalSeconds = 0,
+        bool hasExplicitTimeAxis = false)
     {
         ArgumentNullException.ThrowIfNull(waveform);
-        if (waveform.Length == 0)
-            throw new ArgumentException("Waveform cannot be empty.", nameof(waveform));
+        if (waveform.Length < 2)
+            throw new ArgumentException("Waveform must contain at least two samples.", nameof(waveform));
 
         if (Records.Count > 0 && waveform.Length != Records[0].SampleCount)
             throw new ArgumentException("All waveforms in a group must have the same sample count.", nameof(waveform));
+
+        if (sampleIntervalSeconds <= 0 || !double.IsFinite(sampleIntervalSeconds))
+            throw new ArgumentOutOfRangeException(nameof(sampleIntervalSeconds));
+
+        if (Records.Count > 0 &&
+            Math.Abs(sampleIntervalSeconds - Records[0].SampleIntervalSeconds) >
+            Math.Max(sampleIntervalSeconds, Records[0].SampleIntervalSeconds) * 1e-9)
+            throw new ArgumentException("All waveforms in a group must have the same sample interval.", nameof(sampleIntervalSeconds));
 
         Records.Add(new WaveformRecord
         {
             SourceName = sourceName ?? string.Empty,
             Samples = (double[])waveform.Clone(),
-            Features = features?.Clone() ?? new FeatureVector()
+            Features = features?.Clone() ?? new FeatureVector(),
+            SampleIntervalSeconds = sampleIntervalSeconds,
+            HasExplicitTimeAxis = hasExplicitTimeAxis
         });
     }
 
