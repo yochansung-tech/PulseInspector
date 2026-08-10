@@ -28,6 +28,36 @@ PulseInspector is a .NET 8 WinForms application for pulse waveform inspection, f
   - Threshold
 - Chi-square threshold at configurable confidence; Release 1.0 defaults to 99.9% with df=6 and threshold 22.457744
 
+## CSV import modes
+
+PulseInspector supports two CSV input modes.
+
+### 1. One waveform per CSV file
+
+Use **File → Add Group from CSV...** and select multiple CSV files that belong to one group. Each selected file is loaded as one waveform record.
+
+A file may contain either:
+
+- one numeric sample per line, using the configured measurement period, or
+- two numeric columns containing `time,value`.
+
+### 2. One subgroup per CSV row
+
+Use **File → Add Group from CSV Rows...** when a single CSV contains multiple subgroup measurements, with one complete subgroup on each line.
+
+For example, a 64-sample CSV can be arranged as:
+
+```text
+s1,s2,s3,...,s64
+s1,s2,s3,...,s64
+s1,s2,s3,...,s64
+...
+```
+
+Each non-empty numeric row becomes one `WaveformRecord` / subgroup inside one `GroupData`. The next line is treated as the next subgroup. All rows in the file must contain the same number of samples. The default measurement period is 2.56 µs unless changed in the import options.
+
+The row-based loader intentionally does not run automatic pulse segmentation. Each row is already considered a complete subgroup. This allows recorded subgroup boundaries to be preserved exactly as provided by the measurement system.
+
 ## Group-level inspection
 
 A measurement group represents multiple waveforms that belong to the same physical or logical inspection unit. Each waveform is converted to a FeatureVector. The group feature vector is the arithmetic mean of the statistical features across the waveforms in that group.
