@@ -12,6 +12,7 @@ public sealed class MainForm : Form
     private readonly FeatureGrid _features = new();
     private readonly StatusIndicator _status = new();
     private readonly FeatureExtractor _extractor = new();
+    private readonly CsvWaveformLoader _csvLoader = new();
     private readonly GroupInspectionService _groupService = new();
     private readonly List<GroupData> _groups = new();
     private readonly ListBox _groupList = new() { Dock = DockStyle.Fill };
@@ -96,18 +97,24 @@ public sealed class MainForm : Form
         {
             foreach (var file in dialog.FileNames)
             {
-                var values = ReadCsv(file);
-                if (values.Length == 0)
-                    throw new InvalidOperationException($"No numeric samples found in '{Path.GetFileName(file)}'.");
+                var data = _csvLoader.Load(file);
+                var features = _extractor.Extract(data.Samples, data.SampleIntervalSeconds);
 
-                group.AddWaveform(values, _extractor.Extract(values));
+                group.AddWaveform(
+                    data.Samples,
+                    features,
+                    data.SourceName,
+                    data.SampleIntervalSeconds,
+                    data.HasExplicitTimeAxis);
             }
 
             _groups.Add(group);
             _groupList.Items.Add(CreateGroupLabel(group));
             _groupList.SelectedIndex = _groups.Count - 1;
             _model = null;
-            _status.SetState(true, $"Added Group {ShortId(group)}: {group.SampleCount} waveform(s)");
+            _status.SetState(true,
+                $"Added Group {ShortId(group)}: {group.SampleCount} waveform(s), " +
+                $"N={group.Records[0].SampleCount}, dt={group.Records[0].SampleIntervalSeconds:E3}s");
         }
         catch (Exception ex)
         {
@@ -224,16 +231,6 @@ public sealed class MainForm : Form
         _model = null;
         _waveform.SetData(Array.Empty<double>());
         _status.SetState(false, "Groups cleared");
-    }
-
-    private static double[] ReadCsv(string file)
-    {
-        return File.ReadAllLines(file)
-            .SelectMany(line => line.Split(',', ';', '\t'))
-            .Select(s => double.TryParse(s.Trim(), out var value) ? (double?)value : null)
-            .Where(v => v.HasValue)
-            .Select(v => v!.Value)
-            .ToArray();
     }
 
     private static string ShortId(GroupData group) => group.Id[..8];
