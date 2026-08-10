@@ -28,6 +28,14 @@ PulseInspector is a .NET 8 WinForms application for pulse waveform inspection, f
   - Threshold
 - Chi-square threshold at configurable confidence; Release 1.0 defaults to 99.9% with df=6 and threshold 22.457744
 
+## Group-level inspection
+
+A measurement group represents multiple waveforms that belong to the same physical or logical inspection unit. Each waveform is converted to a FeatureVector. The group feature vector is the arithmetic mean of the statistical features across the waveforms in that group.
+
+Training is performed from normal groups, not individual waveforms. The covariance model therefore represents variation between inspection groups. During inspection, the complete group is classified once using its aggregated feature vector.
+
+`GroupData` enforces equal waveform length within a group, keeps waveform and feature data together, and provides mean-waveform and mean-feature aggregation. `GroupInspectionService` owns the group-level training and inspection flow.
+
 ## Release 1.0 feature ordering
 
 The complete display order is deterministic and alphabetic by feature name:
