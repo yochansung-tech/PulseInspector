@@ -13,6 +13,7 @@ public sealed class MainForm : Form
     private readonly StatusIndicator _status = new();
     private readonly FeatureExtractor _extractor = new();
     private readonly CsvWaveformLoader _csvLoader = new();
+    private readonly CsvRowWaveformLoader _csvRowLoader = new();
     private readonly GroupInspectionService _groupService = new();
     private readonly List<GroupData> _groups = new();
     private readonly ListBox _groupList = new() { Dock = DockStyle.Fill };
@@ -31,9 +32,14 @@ public sealed class MainForm : Form
         var file = new ToolStripMenuItem("File");
         var addGroup = new ToolStripMenuItem("Add Group from CSV...");
         addGroup.Click += (_, _) => AddGroupFromCsv();
+        file.DropDownItems.Add(addGroup);
+
+        var addRowGroup = new ToolStripMenuItem("Add Group from CSV Rows...");
+        addRowGroup.Click += (_, _) => AddGroupFromCsvRows();
+        file.DropDownItems.Add(addRowGroup);
+
         var clear = new ToolStripMenuItem("Clear Groups");
         clear.Click += (_, _) => ClearGroups();
-        file.DropDownItems.Add(addGroup);
         file.DropDownItems.Add(clear);
         menu.Items.Add(file);
 
@@ -108,18 +114,60 @@ public sealed class MainForm : Form
                     data.HasExplicitTimeAxis);
             }
 
-            _groups.Add(group);
-            _groupList.Items.Add(CreateGroupLabel(group));
-            _groupList.SelectedIndex = _groups.Count - 1;
-            _model = null;
-            _status.SetState(true,
-                $"Added Group {ShortId(group)}: {group.SampleCount} waveform(s), " +
-                $"N={group.Records[0].SampleCount}, dt={group.Records[0].SampleIntervalSeconds:E3}s");
+            AddGroupToUi(group);
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "Group load error", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void AddGroupFromCsvRows()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            Multiselect = false,
+            Title = "Select a CSV where each row is one subgroup"
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            var rows = _csvRowLoader.LoadRows(dialog.FileName);
+            var group = new GroupData();
+
+            foreach (var data in rows)
+            {
+                var features = _extractor.Extract(data.Samples, data.SampleIntervalSeconds);
+                group.AddWaveform(
+                    data.Samples,
+                    features,
+                    data.SourceName,
+                    data.SampleIntervalSeconds,
+                    data.HasExplicitTimeAxis);
+            }
+
+            AddGroupToUi(group);
+            _status.SetState(true,
+                $"Loaded {rows.Count} subgroup row(s) from {Path.GetFileName(dialog.FileName)}");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Row-based CSV load error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void AddGroupToUi(GroupData group)
+    {
+        _groups.Add(group);
+        _groupList.Items.Add(CreateGroupLabel(group));
+        _groupList.SelectedIndex = _groups.Count - 1;
+        _model = null;
+        _status.SetState(true,
+            $"Added Group {ShortId(group)}: {group.SampleCount} waveform(s), " +
+            $"N={group.Records[0].SampleCount}, dt={group.Records[0].SampleIntervalSeconds:E3}s");
     }
 
     private void TrainModel()
