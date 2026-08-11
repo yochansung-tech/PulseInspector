@@ -18,6 +18,7 @@ internal static class Program
             TestGroupDecisionRules();
             TestMahalanobisTrainingAndInspection();
             TestNormalVsDefectivePulseDetection();
+            TestIndividualFeatureDefects();
             Console.WriteLine("ALL TESTS PASSED");
             return 0;
         }
@@ -175,15 +176,7 @@ internal static class Program
 
     private static void TestNormalVsDefectivePulseDetection()
     {
-        var trainingGroups = new List<GroupData>();
-        for (var i = 0; i < 20; i++)
-        {
-            var group = new GroupData();
-            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(i), $"train-{i}-1", 1e-6);
-            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(i + 0.2), $"train-{i}-2", 1e-6);
-            trainingGroups.Add(group);
-        }
-
+        var trainingGroups = CreateTrainingGroups();
         var inspection = new GroupInspectionService();
         var model = inspection.Train(trainingGroups, 0.999);
         Assert(model.Threshold > 0, "Training did not produce a positive Mahalanobis threshold.");
@@ -208,6 +201,42 @@ internal static class Program
         Assert(subgroupResults.Any(r => r.IsDefect), "No subgroup was marked defective.");
     }
 
+    private static void TestIndividualFeatureDefects()
+    {
+        var trainingGroups = CreateTrainingGroups();
+        var inspection = new GroupInspectionService();
+        var model = inspection.Train(trainingGroups, 0.999);
+        var featureNames = new[] { "Peak", "Charge", "FWHM", "RiseTime", "Noise" };
+
+        foreach (var featureName in featureNames)
+        {
+            var group = new GroupData();
+            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.1), "normal", 1e-6);
+            group.AddWaveform(new[] { 0d, 1d }, CreateSingleFeatureDefect(featureName), $"defect-{featureName}", 1e-6);
+            var result = inspection.Inspect(group, model);
+            Assert(result.DefectiveSubgroupCount >= 1, $"{featureName}-only defect was not detected.");
+            Assert(result.MaximumSubgroupMahalanobisDistance > model.Threshold, $"{featureName}-only defect did not exceed threshold.");
+
+            var subgroupResults = new SubgroupInspectionService().Inspect(group, model);
+            var defective = subgroupResults.Single(r => r.SourceName == $"defect-{featureName}");
+            Assert(defective.IsDefect, $"{featureName}-only subgroup was not marked defective.");
+            Assert(double.IsFinite(defective.MahalanobisDistance), $"{featureName}-only Mahalanobis distance is invalid.");
+        }
+    }
+
+    private static List<GroupData> CreateTrainingGroups()
+    {
+        var trainingGroups = new List<GroupData>();
+        for (var i = 0; i < 20; i++)
+        {
+            var group = new GroupData();
+            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(i), $"train-{i}-1", 1e-6);
+            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(i + 0.2), $"train-{i}-2", 1e-6);
+            trainingGroups.Add(group);
+        }
+        return trainingGroups;
+    }
+
     private static FeatureVector CreateTrainingFeatures(double i)
     {
         var vector = new FeatureVector();
@@ -229,6 +258,21 @@ internal static class Program
         vector["Noise"] = 2.0;
         vector["RiseTime"] = 5.0;
         vector["ZScore"] = 4.0;
+        return vector;
+    }
+
+    private static FeatureVector CreateSingleFeatureDefect(string featureName)
+    {
+        var vector = CreateTrainingFeatures(10.1);
+        switch (featureName)
+        {
+            case "Peak": vector["Peak"] = 180; break;
+            case "Charge": vector["Charge"] = 25; break;
+            case "FWHM": vector["FWHM"] = 35; break;
+            case "RiseTime": vector["RiseTime"] = 5.0; break;
+            case "Noise": vector["Noise"] = 2.0; break;
+            default: throw new ArgumentOutOfRangeException(nameof(featureName), featureName, null);
+        }
         return vector;
     }
 
