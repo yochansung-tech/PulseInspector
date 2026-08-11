@@ -34,7 +34,9 @@ public sealed class SettingsForm : Form
         grid.Controls.Add(new Label { Text = "Defect rate threshold", AutoSize = true }, 0, 1); grid.Controls.Add(_rate, 1, 1);
         grid.Controls.Add(new Label { Text = "Training confidence", AutoSize = true }, 0, 2); grid.Controls.Add(_confidence, 1, 2);
         grid.Controls.Add(new Label { Text = "Sample interval (s)", AutoSize = true }, 0, 3); grid.Controls.Add(_sampleInterval, 1, 3);
-        grid.Controls.Add(new Label { Text = "Defect rate is used only by the selected rate rule.", AutoSize = true }, 0, 4); grid.SetColumnSpan(grid.GetControlFromPosition(0, 4), 2);
+        var note = new Label { Text = "Defect rate is used only by the selected rate rule.", AutoSize = true };
+        grid.Controls.Add(note, 0, 4);
+        grid.SetColumnSpan(note, 2);
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80 };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Width = 80 };
