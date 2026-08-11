@@ -18,7 +18,7 @@ public sealed class SettingsForm : Form
 
     public SettingsForm(GroupDecisionPolicy? policy = null, double confidence = 0.999, double sampleIntervalSeconds = 2.56e-6 / 64.0)
     {
-        _policy = policy?.Clone() ?? new GroupDecisionPolicy();
+        _policy = policy ?? new GroupDecisionPolicy();
         Text = "Settings"; Width = 520; Height = 300; StartPosition = FormStartPosition.CenterParent;
 
         _rule.Items.AddRange(new object[] { "Any defective subgroup", "Defective subgroup rate", "Maximum Mahalanobis" });
@@ -43,7 +43,6 @@ public sealed class SettingsForm : Form
     }
 
     private GroupDecisionRule ParseRule() => (GroupDecisionRule)_rule.SelectedIndex;
-
     private double ParseRate() => ParseDouble(_rate.Text, "Defect rate threshold");
 
     private static double ParseDouble(string text, string name)
