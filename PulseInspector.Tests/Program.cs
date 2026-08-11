@@ -19,6 +19,7 @@ internal static class Program
             TestMahalanobisTrainingAndInspection();
             TestNormalVsDefectivePulseDetection();
             TestIndividualFeatureDefects();
+            FeatureDeviationTests.Run();
             Console.WriteLine("ALL TESTS PASSED");
             return 0;
         }
@@ -269,9 +270,9 @@ internal static class Program
             case "Peak": vector["Peak"] = 180; break;
             case "Charge": vector["Charge"] = 25; break;
             case "FWHM": vector["FWHM"] = 35; break;
-            case "RiseTime": vector["RiseTime"] = 5.0; break;
-            case "Noise": vector["Noise"] = 2.0; break;
-            default: throw new ArgumentOutOfRangeException(nameof(featureName), featureName, null);
+            case "RiseTime": vector["RiseTime"] = 5; break;
+            case "Noise": vector["Noise"] = 2; break;
+            default: throw new ArgumentOutOfRangeException(nameof(featureName));
         }
         return vector;
     }
