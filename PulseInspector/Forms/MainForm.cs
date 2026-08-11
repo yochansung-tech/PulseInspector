@@ -29,6 +29,7 @@ public sealed class MainForm : Form
     private InspectionModel? _model;
     private GroupDecisionPolicy _decisionPolicy = new();
     private double _confidence = 0.999;
+    private double _sampleIntervalSeconds = 2.56e-6 / 64.0;
     private bool _updatingDefective;
 
     public MainForm()
@@ -58,11 +59,11 @@ public sealed class MainForm : Form
     {
         try
         {
-            using var form = new SettingsForm(_decisionPolicy, _confidence);
+            using var form = new SettingsForm(_decisionPolicy, _confidence, _sampleIntervalSeconds);
             if (form.ShowDialog(this) != DialogResult.OK) return;
-            var policy = form.Policy; policy.Validate(); _decisionPolicy = policy; _confidence = form.Confidence;
+            var policy = form.Policy; policy.Validate(); _decisionPolicy = policy; _confidence = form.Confidence; _sampleIntervalSeconds = form.SampleIntervalSeconds;
             _model = null; _subgroupResults.Clear(); _subgroupList.Items.Clear(); _deviations.SetResults(Array.Empty<FeatureDeviation>());
-            _status.SetState(true, $"Settings applied: rule={_decisionPolicy.Rule}, confidence={_confidence:G6}, rate={_decisionPolicy.DefectiveSubgroupRateThreshold:P2}");
+            _status.SetState(true, $"Settings applied: rule={_decisionPolicy.Rule}, confidence={_confidence:G6}, rate={_decisionPolicy.DefectiveSubgroupRateThreshold:P2}, dt={_sampleIntervalSeconds:E3}s");
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Invalid settings", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
@@ -71,14 +72,14 @@ public sealed class MainForm : Form
     {
         using var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*", Multiselect = true, Title = "Select waveforms belonging to one group" }; if (dialog.ShowDialog(this) != DialogResult.OK) return;
         var group = new GroupData();
-        try { foreach (var file in dialog.FileNames) { var data = _csvLoader.Load(file); group.AddWaveform(data.Samples, _extractor.Extract(data.Samples, data.SampleIntervalSeconds), data.SourceName, data.SampleIntervalSeconds, data.HasExplicitTimeAxis); } AddGroupToUi(group); }
+        try { foreach (var file in dialog.FileNames) { var data = _csvLoader.Load(file, new CsvImportOptions { SampleIntervalSeconds = _sampleIntervalSeconds }); group.AddWaveform(data.Samples, _extractor.Extract(data.Samples, data.SampleIntervalSeconds), data.SourceName, data.SampleIntervalSeconds, data.HasExplicitTimeAxis); } AddGroupToUi(group); }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Group load error", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 
     private void AddGroupFromCsvRows()
     {
         using var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*", Title = "Select a CSV where each row is one subgroup" }; if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        try { var rows = _csvRowLoader.LoadRows(dialog.FileName); var group = new GroupData(); foreach (var data in rows) group.AddWaveform(data.Samples, _extractor.Extract(data.Samples, data.SampleIntervalSeconds), data.SourceName, data.SampleIntervalSeconds, data.HasExplicitTimeAxis); AddGroupToUi(group); _status.SetState(true, $"Loaded {rows.Count} subgroup row(s) from {Path.GetFileName(dialog.FileName)}"); }
+        try { var rows = _csvRowLoader.LoadRows(dialog.FileName, new CsvImportOptions { SampleIntervalSeconds = _sampleIntervalSeconds }); var group = new GroupData(); foreach (var data in rows) group.AddWaveform(data.Samples, _extractor.Extract(data.Samples, data.SampleIntervalSeconds), data.SourceName, data.SampleIntervalSeconds, data.HasExplicitTimeAxis); AddGroupToUi(group); _status.SetState(true, $"Loaded {rows.Count} subgroup row(s) from {Path.GetFileName(dialog.FileName)} | dt={_sampleIntervalSeconds:E3}s"); }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Row-based CSV load error", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 
