@@ -12,6 +12,7 @@ internal static class Program
             TestFeatureOrder();
             TestGroupMeanFeatures();
             TestRowBasedCsvLoading();
+            TestRowBasedCsvEndToEnd();
             TestGroupDecisionRules();
             TestMahalanobisTrainingAndInspection();
             Console.WriteLine("ALL TESTS PASSED");
@@ -56,6 +57,44 @@ internal static class Program
             Assert(rows.Count == 2, "Row-based CSV did not create two subgroups.");
             Assert(rows.All(r => r.Samples.Length == 4), "Row-based CSV sample count is incorrect.");
             Assert(rows.All(r => Math.Abs(r.SampleIntervalSeconds - 0.001) < 1e-15), "Configured sample interval was not preserved.");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    private static void TestRowBasedCsvEndToEnd()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"pulseinspector-e2e-{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(path,
+                "0,1,2,3,4,3,2,1\n" +
+                "0,2,4,6,8,6,4,2\n" +
+                "0,1.5,3,4.5,6,4.5,3,1.5\n");
+
+            const double dt = 40e-9;
+            var loader = new CsvRowWaveformLoader();
+            var extractor = new FeatureExtractor();
+            var rows = loader.LoadRows(path, new CsvImportOptions { SampleIntervalSeconds = dt });
+            var group = new GroupData();
+
+            foreach (var row in rows)
+            {
+                var features = extractor.Extract(row.Samples, row.SampleIntervalSeconds);
+                group.AddWaveform(row.Samples, features, row.SourceName, row.SampleIntervalSeconds, row.HasExplicitTimeAxis);
+            }
+
+            Assert(rows.Count == 3, "End-to-end row CSV did not produce three rows.");
+            Assert(group.RecordCount == 3, "End-to-end CSV rows were not preserved as three records.");
+            Assert(group.WaveformSampleCount == 8, "End-to-end waveform sample count is incorrect.");
+            Assert(group.Records.All(r => r.Samples.Length == 8), "A CSV row was altered during loading.");
+            Assert(group.Records.All(r => Math.Abs(r.SampleIntervalSeconds - dt) < 1e-15), "Sample interval was not propagated to every subgroup.");
+            Assert(group.Records.Select(r => r.SourceName).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 3, "Subgroup source identities were not preserved.");
+            Assert(group.Records.All(r => double.IsFinite(r.Features["Peak"])), "Feature extraction produced an invalid Peak.");
+            Assert(group.Records.All(r => double.IsFinite(r.Features["Charge"])), "Feature extraction produced an invalid Charge.");
+            Assert(group.MeanFeatures() is not null, "Group mean feature generation failed after CSV import.");
         }
         finally
         {
