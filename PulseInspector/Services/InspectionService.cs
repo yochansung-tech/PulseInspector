@@ -25,13 +25,13 @@ public sealed class InspectionService
         var mean = StatisticsService.Mean(rows);
         var covariance = StatisticsService.Covariance(rows);
         var inverse = StatisticsService.Invert(covariance);
-        var standardDeviations = Enumerable.Range(0, covariance.GetLength(0))
+        var standardDeviations = Enumerable.Range(0, FeatureVector.StatisticalFeatureCount)
             .Select(i => Math.Sqrt(Math.Max(covariance[i, i], 0.0)))
             .Select(x => x > 0 ? x : 1e-12)
             .ToArray();
-        var threshold = StatisticsService.ChiSquareQuantile(FeatureVector.StatisticalFeatureNames.Count, confidence);
+        var threshold = StatisticsService.ChiSquareQuantile(FeatureVector.StatisticalFeatureCount, confidence);
 
-        return new InspectionModel
+        var model = new InspectionModel
         {
             Mean = mean,
             Covariance = covariance,
@@ -42,18 +42,23 @@ public sealed class InspectionService
             Confidence = confidence,
             Threshold = threshold
         };
+        model.ValidateFeatureOrder();
+        return model;
     }
 
     public InspectionResult Inspect(FeatureVector vector, InspectionModel model)
     {
-        if (!model.IsTrained)
-            throw new InvalidOperationException("The inspection model has not been trained.");
+        model.ValidateFeatureOrder();
 
         var peakStd = model.PeakStandardDeviation <= 0 ? 1e-12 : model.PeakStandardDeviation;
         vector["ZScore"] = (vector["Peak"] - model.PeakMean) / peakStd;
 
+        var statisticalValues = vector.ToStatisticalArray();
+        if (statisticalValues.Length != model.Mean.Length)
+            throw new InvalidOperationException("FeatureVector and InspectionModel dimensions do not match.");
+
         var distance = StatisticsService.Mahalanobis(
-            vector.ToStatisticalArray(), model.Mean, model.InverseCovariance);
+            statisticalValues, model.Mean, model.InverseCovariance);
 
         var defect = distance > model.Threshold;
         vector["MahalanobisDistance"] = distance;
