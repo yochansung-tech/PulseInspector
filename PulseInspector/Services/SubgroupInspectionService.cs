@@ -18,7 +18,7 @@ public sealed class SubgroupInspectionService
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(model);
 
-        var results = new List<SubgroupInspectionResult>(group.SampleCount);
+        var results = new List<SubgroupInspectionResult>(group.RecordCount);
         for (var i = 0; i < group.Records.Count; i++)
         {
             var record = group.Records[i];
