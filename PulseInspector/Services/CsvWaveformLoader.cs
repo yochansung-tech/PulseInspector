@@ -7,6 +7,7 @@ public sealed class CsvImportOptions
 {
     // Used when the CSV contains only waveform samples and no time column.
     public double? MeasurementPeriodSeconds { get; init; } = 2.56e-6;
+    public double? SampleIntervalSeconds { get; init; }
     public double TimeToleranceRelative { get; init; } = 1e-6;
 }
 
@@ -30,14 +31,12 @@ public sealed class CsvWaveformLoader
             if (samples.Length < 2)
                 throw new InvalidDataException("A waveform must contain at least two numeric samples.");
 
-            if (!options.MeasurementPeriodSeconds.HasValue || options.MeasurementPeriodSeconds.Value <= 0)
-                throw new InvalidDataException("Measurement period is required for a single-column CSV.");
-
+            var dt = ResolveSampleInterval(options, samples.Length);
             result = new WaveformData
             {
                 SourceName = Path.GetFileName(filePath),
                 Samples = samples,
-                SampleIntervalSeconds = options.MeasurementPeriodSeconds.Value / samples.Length,
+                SampleIntervalSeconds = dt,
                 HasExplicitTimeAxis = false
             };
         }
@@ -66,6 +65,21 @@ public sealed class CsvWaveformLoader
         return result;
     }
 
+    private static double ResolveSampleInterval(CsvImportOptions options, int sampleCount)
+    {
+        if (options.SampleIntervalSeconds.HasValue)
+        {
+            if (!double.IsFinite(options.SampleIntervalSeconds.Value) || options.SampleIntervalSeconds.Value <= 0)
+                throw new InvalidDataException("Sample interval must be a positive finite value.");
+            return options.SampleIntervalSeconds.Value;
+        }
+
+        if (!options.MeasurementPeriodSeconds.HasValue || options.MeasurementPeriodSeconds.Value <= 0)
+            throw new InvalidDataException("Measurement period or sample interval is required for a single-column CSV.");
+
+        return options.MeasurementPeriodSeconds.Value / sampleCount;
+    }
+
     private static List<double[]> ReadNumericRows(string filePath)
     {
         var rows = new List<double[]>();
@@ -79,7 +93,7 @@ public sealed class CsvWaveformLoader
             foreach (var cell in cells)
             {
                 if (double.TryParse(cell, NumberStyles.Float | NumberStyles.AllowLeadingSign,
-                    CultureInfo.InvariantCulture, out var value))
+                    CultureInfo.InvariantCulture, out var value) && double.IsFinite(value))
                     values.Add(value);
             }
 
