@@ -4,7 +4,12 @@ namespace PulseInspector.Services;
 
 public sealed class SubgroupInspectionService
 {
-    private readonly GroupInspectionService _groupService = new();
+    private readonly InspectionService _inspectionService;
+
+    public SubgroupInspectionService(InspectionService? inspectionService = null)
+    {
+        _inspectionService = inspectionService ?? new InspectionService();
+    }
 
     public IReadOnlyList<SubgroupInspectionResult> Inspect(
         GroupData group,
@@ -20,15 +25,15 @@ public sealed class SubgroupInspectionService
             var features = record.Features
                 ?? throw new InvalidOperationException($"Subgroup {i + 1} has no feature vector.");
 
-            var distance = _groupService.CalculateMahalanobisDistance(features, model);
+            var result = _inspectionService.Inspect(features.Clone(), model);
             results.Add(new SubgroupInspectionResult
             {
                 Index = i + 1,
                 SourceName = record.SourceName,
-                Features = features,
-                MahalanobisDistance = distance,
-                Threshold = model.Threshold,
-                IsDefect = distance > model.Threshold
+                Features = result.Features,
+                MahalanobisDistance = result.MahalanobisDistance,
+                Threshold = result.Threshold,
+                IsDefect = result.IsDefect
             });
         }
 
