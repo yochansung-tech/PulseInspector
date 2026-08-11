@@ -17,6 +17,7 @@ internal static class Program
             TestRealisticPulseCsvFeatures();
             TestGroupDecisionRules();
             TestMahalanobisTrainingAndInspection();
+            TestNormalVsDefectivePulseDetection();
             Console.WriteLine("ALL TESTS PASSED");
             return 0;
         }
@@ -113,14 +114,12 @@ internal static class Program
         var rows = loader.LoadRows(path, new CsvImportOptions { SampleIntervalSeconds = dt });
         Assert(rows.Count == 5, "Realistic pulse fixture must contain five subgroups.");
         Assert(rows.All(r => r.Samples.Length == 22), "Realistic pulse fixture must contain 22 samples per subgroup.");
-
         var features = rows.Select(r => extractor.Extract(r.Samples, r.SampleIntervalSeconds)).ToList();
         var peaks = features.Select(f => f["Peak"]).ToArray();
         var charges = features.Select(f => f["Charge"]).ToArray();
         var riseTimes = features.Select(f => f["RiseTime"]).ToArray();
         var fwhms = features.Select(f => f["FWHM"]).ToArray();
         var noises = features.Select(f => f["Noise"]).ToArray();
-
         Assert(peaks.All(double.IsFinite), "Realistic pulse Peak contains a non-finite value.");
         Assert(charges.All(double.IsFinite), "Realistic pulse Charge contains a non-finite value.");
         Assert(riseTimes.All(double.IsFinite), "Realistic pulse RiseTime contains a non-finite value.");
@@ -172,6 +171,65 @@ internal static class Program
         Assert(subgroupResults.Count == 2, "Subgroup inspection count is incorrect.");
         Assert(subgroupResults.All(r => double.IsFinite(r.MahalanobisDistance)), "Subgroup Mahalanobis distance is not finite.");
         Assert(subgroupResults.All(r => r.Features is not null), "Subgroup inspection did not preserve FeatureVector.");
+    }
+
+    private static void TestNormalVsDefectivePulseDetection()
+    {
+        var trainingGroups = new List<GroupData>();
+        for (var i = 0; i < 20; i++)
+        {
+            var group = new GroupData();
+            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(i), $"train-{i}-1", 1e-6);
+            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(i + 0.2), $"train-{i}-2", 1e-6);
+            trainingGroups.Add(group);
+        }
+
+        var inspection = new GroupInspectionService();
+        var model = inspection.Train(trainingGroups, 0.999);
+        Assert(model.Threshold > 0, "Training did not produce a positive Mahalanobis threshold.");
+
+        var normalGroup = new GroupData();
+        normalGroup.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.1), "normal-1", 1e-6);
+        normalGroup.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.2), "normal-2", 1e-6);
+        var normalResult = inspection.Inspect(normalGroup, model);
+        Assert(normalResult.DefectiveSubgroupCount == 0, "A normal group was classified as defective.");
+        Assert(normalResult.DefectiveSubgroupRate == 0, "Normal group defect rate should be zero.");
+
+        var defectiveGroup = new GroupData();
+        defectiveGroup.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.1), "defect-normal", 1e-6);
+        defectiveGroup.AddWaveform(new[] { 0d, 1d }, CreateDefectiveFeatures(), "defect-outlier", 1e-6);
+        var defectiveResult = inspection.Inspect(defectiveGroup, model);
+        Assert(defectiveResult.DefectiveSubgroupCount >= 1, "The deliberately defective subgroup was not detected.");
+        Assert(defectiveResult.DefectiveSubgroupRate > 0, "Defective group did not receive a positive defect rate.");
+        Assert(defectiveResult.MaximumSubgroupMahalanobisDistance > model.Threshold, "Defective subgroup did not exceed the Mahalanobis threshold.");
+
+        var subgroupResults = new SubgroupInspectionService().Inspect(defectiveGroup, model);
+        Assert(subgroupResults.Count == 2, "Defective group subgroup count is incorrect.");
+        Assert(subgroupResults.Any(r => r.IsDefect), "No subgroup was marked defective.");
+    }
+
+    private static FeatureVector CreateTrainingFeatures(double i)
+    {
+        var vector = new FeatureVector();
+        vector["Charge"] = 10 + 0.10 * i;
+        vector["FWHM"] = 20 + 0.05 * i;
+        vector["Noise"] = 0.50 + 0.005 * i;
+        vector["Peak"] = 100 + 0.20 * i;
+        vector["RiseTime"] = 2.0 + 0.01 * i;
+        vector["ZScore"] = 0.01 * i;
+        return vector;
+    }
+
+    private static FeatureVector CreateDefectiveFeatures()
+    {
+        var vector = CreateTrainingFeatures(10.1);
+        vector["Peak"] = 180;
+        vector["Charge"] = 25;
+        vector["FWHM"] = 35;
+        vector["Noise"] = 2.0;
+        vector["RiseTime"] = 5.0;
+        vector["ZScore"] = 4.0;
+        return vector;
     }
 
     private static FeatureVector CreateFeatures(double value)
