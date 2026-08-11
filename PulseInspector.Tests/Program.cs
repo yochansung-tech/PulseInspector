@@ -67,8 +67,8 @@ internal static class Program
     {
         var results = new[]
         {
-            new SubgroupInspectionResult { Index = 1, SourceName = "1", MahalanobisDistance = 1, Threshold = 10, IsDefect = false },
-            new SubgroupInspectionResult { Index = 2, SourceName = "2", MahalanobisDistance = 20, Threshold = 10, IsDefect = true }
+            new SubgroupInspectionResult { Index = 1, SourceName = "1", Features = CreateFeatures(1), MahalanobisDistance = 1, Threshold = 10, IsDefect = false },
+            new SubgroupInspectionResult { Index = 2, SourceName = "2", Features = CreateFeatures(2), MahalanobisDistance = 20, Threshold = 10, IsDefect = true }
         };
         var service = new GroupDecisionService();
         Assert(service.IsDefect(results, new GroupDecisionPolicy { Rule = GroupDecisionRule.AnyDefectiveSubgroup }), "Any-defective rule failed.");
@@ -94,8 +94,15 @@ internal static class Program
 
         var normal = groups[0];
         var result = service.Inspect(normal, model);
-        Assert(result.SubgroupResults.Count == 2, "Subgroup inspection count is incorrect.");
-        Assert(result.SubgroupResults.All(r => double.IsFinite(r.MahalanobisDistance)), "Subgroup Mahalanobis distance is not finite.");
+        Assert(result.DefectiveSubgroupCount >= 0, "Group inspection returned an invalid subgroup defect count.");
+        Assert(result.DefectiveSubgroupRate >= 0 && result.DefectiveSubgroupRate <= 1, "Group inspection returned an invalid subgroup defect rate.");
+        Assert(double.IsFinite(result.MaximumSubgroupMahalanobisDistance), "Maximum subgroup Mahalanobis distance is not finite.");
+
+        var subgroupService = new SubgroupInspectionService();
+        var subgroupResults = subgroupService.Inspect(normal, model);
+        Assert(subgroupResults.Count == 2, "Subgroup inspection count is incorrect.");
+        Assert(subgroupResults.All(r => double.IsFinite(r.MahalanobisDistance)), "Subgroup Mahalanobis distance is not finite.");
+        Assert(subgroupResults.All(r => r.Features is not null), "Subgroup inspection did not preserve FeatureVector.");
     }
 
     private static FeatureVector CreateFeatures(double value)
