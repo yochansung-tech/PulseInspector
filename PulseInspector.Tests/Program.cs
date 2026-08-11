@@ -13,6 +13,7 @@ internal static class Program
             TestGroupMeanFeatures();
             TestRowBasedCsvLoading();
             TestRowBasedCsvEndToEnd();
+            TestFeatureExtractionExpectedValues();
             TestGroupDecisionRules();
             TestMahalanobisTrainingAndInspection();
             Console.WriteLine("ALL TESTS PASSED");
@@ -102,6 +103,20 @@ internal static class Program
         }
     }
 
+    private static void TestFeatureExtractionExpectedValues()
+    {
+        var extractor = new FeatureExtractor();
+        const double dt = 1e-6;
+        var samples = new[] { 0d, 1d, 2d, 1d, 0d };
+        var features = extractor.Extract(samples, dt);
+
+        AssertNear(features["Peak"], 2d, 1e-12, "Peak");
+        AssertNear(features["Charge"], 4d * dt, 1e-18, "Charge");
+        AssertNear(features["RiseTime"], 2d * dt, 1e-12, "RiseTime");
+        AssertNear(features["FWHM"], 2d * dt, 1e-12, "FWHM");
+        AssertNear(features["Noise"], 0d, 1e-12, "Noise");
+    }
+
     private static void TestGroupDecisionRules()
     {
         var results = new[]
@@ -162,6 +177,12 @@ internal static class Program
         vector["RiseTime"] = 2 + 0.15 * i + (i % 2) * 0.04;
         vector["ZScore"] = 0;
         return vector;
+    }
+
+    private static void AssertNear(double actual, double expected, double tolerance, string name)
+    {
+        if (!double.IsFinite(actual) || Math.Abs(actual - expected) > tolerance)
+            throw new InvalidOperationException($"{name} mismatch. Expected {expected:G17}, actual {actual:G17}, tolerance {tolerance:G17}.");
     }
 
     private static void Assert(bool condition, string message)
