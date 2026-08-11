@@ -6,7 +6,15 @@ public sealed class GroupData
     public List<WaveformRecord> Records { get; } = new();
     public bool IsDefective { get; set; }
 
-    public int SampleCount => Records.Count;
+    /// <summary>Number of waveform/subgroup records contained in this group.</summary>
+    public int RecordCount => Records.Count;
+
+    /// <summary>Number of samples in each waveform. All records in a group must match.</summary>
+    public int WaveformSampleCount => Records.Count == 0 ? 0 : Records[0].SampleCount;
+
+    /// <summary>Backward-compatible alias for RecordCount. Prefer RecordCount in new code.</summary>
+    [Obsolete("Use RecordCount instead. SampleCount now means waveform sample count.")]
+    public int SampleCount => RecordCount;
 
     public IReadOnlyList<double[]> Waveforms => Records.Select(r => r.Samples).ToArray();
     public IReadOnlyList<FeatureVector> Features => Records.Select(r => r.Features).ToArray();
@@ -22,7 +30,7 @@ public sealed class GroupData
         if (waveform.Length < 2)
             throw new ArgumentException("Waveform must contain at least two samples.", nameof(waveform));
 
-        if (Records.Count > 0 && waveform.Length != Records[0].SampleCount)
+        if (Records.Count > 0 && waveform.Length != WaveformSampleCount)
             throw new ArgumentException("All waveforms in a group must have the same sample count.", nameof(waveform));
 
         if (sampleIntervalSeconds <= 0 || !double.IsFinite(sampleIntervalSeconds))
@@ -46,7 +54,7 @@ public sealed class GroupData
     public double[]? MeanWaveform()
     {
         if (Records.Count == 0) return null;
-        var length = Records[0].SampleCount;
+        var length = WaveformSampleCount;
         var result = new double[length];
         foreach (var record in Records)
             for (var i = 0; i < length; i++) result[i] += record.Samples[i];
