@@ -19,6 +19,7 @@ public sealed class MainForm : Form
     private readonly SubgroupInspectionService _subgroupService = new();
     private readonly FeatureDeviationService _deviationService = new();
     private readonly GroupDecisionService _decisionService = new();
+    private readonly TrainingValidationService _trainingValidationService = new();
     private readonly List<GroupData> _groups = new();
     private readonly List<SubgroupInspectionResult> _subgroupResults = new();
     private readonly ListBox _groupList = new() { Dock = DockStyle.Fill };
@@ -84,14 +85,41 @@ public sealed class MainForm : Form
     private void AddGroupToUi(GroupData group)
     {
         _groups.Add(group); _groupList.Items.Add(CreateGroupLabel(group)); _groupList.SelectedIndex = _groups.Count - 1; _model = null; _deviations.SetResults(Array.Empty<FeatureDeviation>());
-        _status.SetState(true, $"Added Group {ShortId(group)}: {group.SampleCount} waveform(s), N={group.Records[0].SampleCount}, dt={group.Records[0].SampleIntervalSeconds:E3}s");
+        _status.SetState(true, $"Added Group {ShortId(group)}: {group.RecordCount} waveform(s), N={group.WaveformSampleCount}, dt={group.Records[0].SampleIntervalSeconds:E3}s");
+    }
+
+    private bool ValidateTrainingGroups(GroupData[] normalGroups, out TrainingValidationResult report)
+    {
+        var vectors = normalGroups.SelectMany(g => g.Records.Select(r => r.Features));
+        report = _trainingValidationService.Validate(vectors);
+        if (report.IsValid) return true;
+
+        var lines = report.Issues.Select(i => $"• {(string.IsNullOrWhiteSpace(i.FeatureName) ? "Training" : i.FeatureName)}: {i.Message}");
+        MessageBox.Show(this, string.Join(Environment.NewLine, lines), "Training data validation failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        _status.SetState(false, $"Training validation failed: {report.Issues.Count} issue(s)");
+        return false;
+    }
+
+    private void ShowTrainingWarnings(TrainingValidationResult report)
+    {
+        var warnings = report.Issues.Where(i => i.Code.StartsWith("WARN_", StringComparison.Ordinal)).ToArray();
+        if (warnings.Length == 0) return;
+        var message = string.Join(Environment.NewLine, warnings.Select(i => $"• {(string.IsNullOrWhiteSpace(i.FeatureName) ? "Training" : i.FeatureName)}: {i.Message}"));
+        MessageBox.Show(this, message, "Training data warnings", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void TrainModel()
     {
-        var normalGroups = _groups.Where(g => !g.IsDefective).ToArray(); var required = FeatureVector.StatisticalFeatureNames.Count + 1;
+        var normalGroups = _groups.Where(g => !g.IsDefective).ToArray();
+        var required = FeatureVector.StatisticalFeatureNames.Count + 1;
         if (normalGroups.Length < required) { MessageBox.Show(this, $"At least {required} normal groups are required for the six-feature covariance model.\nCurrent normal groups: {normalGroups.Length}", "Training data insufficient", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
-        try { _model = _groupService.Train(normalGroups, _confidence); _status.SetState(true, $"Model trained: {normalGroups.Length} normal groups, confidence={_confidence:G6}, threshold={_model.Threshold:F6}"); }
+        try
+        {
+            if (!ValidateTrainingGroups(normalGroups, out var report)) return;
+            ShowTrainingWarnings(report);
+            _model = _groupService.Train(normalGroups, _confidence);
+            _status.SetState(true, $"Model trained: {normalGroups.Length} normal groups, confidence={_confidence:G6}, threshold={_model.Threshold:F6}");
+        }
         catch (Exception ex) { _model = null; MessageBox.Show(this, ex.Message, "Training error", MessageBoxButtons.OK, MessageBoxIcon.Error); _status.SetState(false, "Training failed"); }
     }
 
@@ -102,8 +130,10 @@ public sealed class MainForm : Form
         if (trainingGroups.Length < required) { MessageBox.Show(this, $"Inspection requires at least {required} normal training groups excluding the selected group.", "Training data insufficient", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
         try
         {
+            if (!ValidateTrainingGroups(trainingGroups, out var report)) return;
+            ShowTrainingWarnings(report);
             _model = _groupService.Train(trainingGroups, _confidence); var meanResult = _groupService.Inspect(selected, _model); _features.SetFeatures(meanResult.Features); PopulateSubgroupResults(selected); _deviations.SetResults(_deviationService.Analyze(meanResult.Features, _model));
-            var finalDefect = _decisionService.IsDefect(_subgroupResults, _decisionPolicy); var defectCount = _subgroupResults.Count(r => r.IsDefect); var rate = defectCount / (double)_subgroupResults.Count; var maxMd = _subgroupResults.Max(r => r.MahalanobisDistance);
+            var finalDefect = _decisionService.IsDefect(_subgroupResults, _decisionPolicy); var defectCount = _subgroupResults.Count(r => r.IsDefect); var rate = _subgroupResults.Count == 0 ? 0 : defectCount / (double)_subgroupResults.Count; var maxMd = _subgroupResults.Count == 0 ? 0 : _subgroupResults.Max(r => r.MahalanobisDistance);
             _status.SetState(!finalDefect, $"Group {ShortId(selected)}: {(finalDefect ? "DEFECT" : "NORMAL")} | Rule={_decisionPolicy.Rule} | Defective={defectCount}/{_subgroupResults.Count} ({rate:P2}) | Max MD={maxMd:F6} | Mean MD={meanResult.MahalanobisDistance:F6} | Threshold={meanResult.Threshold:F6}");
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Inspection error", MessageBoxButtons.OK, MessageBoxIcon.Error); _status.SetState(false, "Inspection failed"); }
@@ -117,7 +147,7 @@ public sealed class MainForm : Form
 
     private void ShowSelectedGroup()
     {
-        var index = _groupList.SelectedIndex; if (index < 0 || index >= _groups.Count) return; var group = _groups[index]; var waveform = group.MeanWaveform(); if (waveform is not null) _waveform.SetData(waveform); var features = group.MeanFeatures(); if (features is not null) _features.SetFeatures(features); _deviations.SetResults(Array.Empty<FeatureDeviation>()); _updatingDefective = true; _defective.Checked = group.IsDefective; _updatingDefective = false; _subgroupResults.Clear(); _subgroupList.Items.Clear(); _status.SetState(true, $"Selected Group {ShortId(group)}: {group.SampleCount} waveform(s)");
+        var index = _groupList.SelectedIndex; if (index < 0 || index >= _groups.Count) return; var group = _groups[index]; var waveform = group.MeanWaveform(); if (waveform is not null) _waveform.SetData(waveform); var features = group.MeanFeatures(); if (features is not null) _features.SetFeatures(features); _deviations.SetResults(Array.Empty<FeatureDeviation>()); _updatingDefective = true; _defective.Checked = group.IsDefective; _updatingDefective = false; _subgroupResults.Clear(); _subgroupList.Items.Clear(); _status.SetState(true, $"Selected Group {ShortId(group)}: {group.RecordCount} waveform(s)");
     }
 
     private void ShowSelectedSubgroup()
@@ -136,5 +166,5 @@ public sealed class MainForm : Form
     }
 
     private static string ShortId(GroupData group) => group.Id[..8];
-    private static string CreateGroupLabel(GroupData group) => $"{ShortId(group)} | {group.SampleCount} waveform(s) | {(group.IsDefective ? "DEFECT" : "NORMAL")}";
+    private static string CreateGroupLabel(GroupData group) => $"{ShortId(group)} | {group.RecordCount} waveform(s) | {(group.IsDefective ? "DEFECT" : "NORMAL")}";
 }
