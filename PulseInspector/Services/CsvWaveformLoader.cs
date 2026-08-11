@@ -24,7 +24,7 @@ public sealed class CsvWaveformLoader
             throw new InvalidDataException($"No numeric data was found in '{Path.GetFileName(filePath)}'.");
 
         WaveformData result;
-        if (rows.All(r => r.Count == 1))
+        if (rows.All(r => r.Length == 1))
         {
             var samples = rows.Select(r => r[0]).ToArray();
             if (samples.Length < 2)
@@ -41,7 +41,7 @@ public sealed class CsvWaveformLoader
                 HasExplicitTimeAxis = false
             };
         }
-        else if (rows.All(r => r.Count == 2))
+        else if (rows.All(r => r.Length == 2))
         {
             var time = rows.Select(r => r[0]).ToArray();
             var samples = rows.Select(r => r[1]).ToArray();
