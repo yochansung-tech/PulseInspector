@@ -12,43 +12,30 @@ public sealed class FeatureDeviationService
             throw new InvalidOperationException("The inspection model has not been trained.");
 
         var names = FeatureVector.StatisticalFeatureNames;
-        var result = new List<FeatureDeviation>(names.Count);
+        var x = vector.ToStatisticalArray();
+        var centered = new double[x.Length];
+        for (var i = 0; i < x.Length; i++)
+            centered[i] = x[i] - model.Mean[i];
 
+        var weighted = new double[x.Length];
+        for (var i = 0; i < x.Length; i++)
+            for (var j = 0; j < x.Length; j++)
+                weighted[i] += model.InverseCovariance[i, j] * centered[j];
+
+        var result = new List<FeatureDeviation>(names.Count);
         for (var i = 0; i < names.Count; i++)
         {
-            var name = names[i];
-            var value = vector[name];
-            var mean = model.Mean[i];
-
-            // The model covariance does not expose individual standard deviations directly.
-            // The diagonal of the inverse covariance is not a valid variance, so contribution is
-            // intentionally reported as a normalized squared deviation using the model mean only
-            // when a finite scale can be estimated. A zero scale is treated as zero contribution.
-            var varianceScale = EstimateVarianceScale(model.InverseCovariance, i);
-            var std = varianceScale > 0 ? 1.0 / Math.Sqrt(varianceScale) : 0.0;
-            var z = std > 0 ? (value - mean) / std : 0.0;
+            var std = model.StandardDeviations[i];
+            var z = std > 0 ? centered[i] / std : 0.0;
+            var contribution = centered[i] * weighted[i];
 
             result.Add(new FeatureDeviation(
-                name,
-                value,
-                mean,
-                std,
-                z,
-                Math.Abs(z),
-                z * z));
+                names[i], x[i], model.Mean[i], std, z, Math.Abs(z), contribution));
         }
 
         return result
             .OrderByDescending(x => x.AbsoluteZScore)
             .ThenBy(x => x.FeatureName, StringComparer.Ordinal)
             .ToArray();
-    }
-
-    private static double EstimateVarianceScale(double[,] inverseCovariance, int index)
-    {
-        // For a diagonal covariance matrix this is exact. For a correlated model, a
-        // per-feature z-score requires the original covariance, which is intentionally
-        // not stored in InspectionModel. Return zero rather than inventing a scale.
-        return 0.0;
     }
 }
