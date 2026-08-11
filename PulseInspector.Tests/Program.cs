@@ -114,9 +114,10 @@ internal static class Program
         // RiseTime = 10% -> 90% threshold crossing index distance.
         // FWHM = first -> last 50% threshold crossing index distance.
         // Charge = trapezoidal integral of the positive component only.
-        // Baseline/noise use the lowest 20% of samples; here that segment is [0, 0].
+        // For this waveform the baseline is zero, so the positive trapezoidal area is 4 * dt.
+        // Baseline/noise use the lowest 20% of samples; here that segment is [0].
         AssertNear(features["Peak"], 2d, 1e-12, "Peak");
-        AssertNear(features["Charge"], 2.5e-6, 1e-18, "Charge");
+        AssertNear(features["Charge"], 4e-6, 1e-18, "Charge");
         AssertNear(features["RiseTime"], 1e-6, 1e-18, "RiseTime");
         AssertNear(features["FWHM"], 2e-6, 1e-18, "FWHM");
         AssertNear(features["Noise"], 0d, 1e-12, "Noise");
