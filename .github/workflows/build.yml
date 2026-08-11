@@ -24,3 +24,6 @@ jobs:
 
       - name: Build Release
         run: dotnet build PulseInspector.sln --configuration Release --no-restore
+
+      - name: Run algorithm tests
+        run: dotnet run --project PulseInspector.Tests/PulseInspector.Tests.csproj --configuration Release --no-restore
