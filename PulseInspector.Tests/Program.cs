@@ -79,11 +79,11 @@ internal static class Program
     private static void TestMahalanobisTrainingAndInspection()
     {
         var groups = new List<GroupData>();
-        for (var i = 0; i < 8; i++)
+        for (var i = 0; i < 10; i++)
         {
             var group = new GroupData();
-            group.AddWaveform(new[] { 0d, 1d }, CreateFeatures(10 + i), $"g{i}-1", 1e-6);
-            group.AddWaveform(new[] { 0d, 1d }, CreateFeatures(10 + i), $"g{i}-2", 1e-6);
+            group.AddWaveform(new[] { 0d, 1d }, CreateIndependentFeatures(i), $"g{i}-1", 1e-6);
+            group.AddWaveform(new[] { 0d, 1d }, CreateIndependentFeatures(i), $"g{i}-2", 1e-6);
             groups.Add(group);
         }
 
@@ -103,6 +103,18 @@ internal static class Program
         var vector = new FeatureVector();
         foreach (var name in FeatureVector.StatisticalFeatureNames)
             vector[name] = value;
+        return vector;
+    }
+
+    private static FeatureVector CreateIndependentFeatures(double i)
+    {
+        var vector = new FeatureVector();
+        vector["Charge"] = 10 + i;
+        vector["FWHM"] = 20 + 2 * i + (i % 2) * 0.25;
+        vector["Noise"] = 0.5 + 0.1 * i + (i % 3) * 0.03;
+        vector["Peak"] = 100 + 3 * i + (i % 4) * 0.2;
+        vector["RiseTime"] = 2 + 0.15 * i + (i % 2) * 0.04;
+        vector["ZScore"] = 0;
         return vector;
     }
 
