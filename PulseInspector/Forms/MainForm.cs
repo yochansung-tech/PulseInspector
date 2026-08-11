@@ -89,9 +89,18 @@ public sealed class MainForm : Form
         _status.SetState(true, $"Added Group {ShortId(group)}: {group.RecordCount} waveform(s), N={group.WaveformSampleCount}, dt={group.Records[0].SampleIntervalSeconds:E3}s");
     }
 
+    private FeatureVector[] GetTrainingFeatures(GroupData[] normalGroups)
+    {
+        return normalGroups.Select(g =>
+        {
+            var features = g.MeanFeatures();
+            return features ?? throw new InvalidOperationException($"Group '{g.Id}' contains no valid features.");
+        }).ToArray();
+    }
+
     private bool ValidateTrainingGroups(GroupData[] normalGroups, out TrainingValidationResult report)
     {
-        var vectors = normalGroups.SelectMany(g => g.Records.Select(r => r.Features));
+        var vectors = GetTrainingFeatures(normalGroups);
         report = _trainingValidationService.Validate(vectors);
         if (report.IsValid) return true;
 
