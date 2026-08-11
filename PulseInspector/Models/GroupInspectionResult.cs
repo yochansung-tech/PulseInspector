@@ -7,4 +7,8 @@ public sealed record GroupInspectionResult(
     double MahalanobisDistance,
     double Threshold,
     FeatureVector Features,
-    string Message);
+    string Message,
+    int DefectiveSubgroupCount = 0,
+    double DefectiveSubgroupRate = 0.0,
+    double MaximumSubgroupMahalanobisDistance = 0.0,
+    GroupDecisionRule DecisionRule = GroupDecisionRule.AnyDefectiveSubgroup);
