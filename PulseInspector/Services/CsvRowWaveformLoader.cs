@@ -21,6 +21,7 @@ public sealed class CsvRowWaveformLoader
 
         var result = new List<WaveformData>();
         var lineNumber = 0;
+        int? expectedSampleCount = null;
 
         foreach (var rawLine in File.ReadLines(filePath))
         {
@@ -44,6 +45,11 @@ public sealed class CsvRowWaveformLoader
                 }
             }
 
+            expectedSampleCount ??= samples.Length;
+            if (samples.Length != expectedSampleCount.Value)
+                throw new InvalidDataException(
+                    $"Inconsistent subgroup sample count at line {lineNumber}: expected {expectedSampleCount.Value}, received {samples.Length}.");
+
             var dt = options.MeasurementPeriodSeconds.Value / samples.Length;
             var data = new WaveformData
             {
@@ -58,11 +64,6 @@ public sealed class CsvRowWaveformLoader
 
         if (result.Count == 0)
             throw new InvalidDataException($"No waveform rows were found in '{Path.GetFileName(filePath)}'.");
-
-        var sampleCount = result[0].SampleCount;
-        if (result.Any(x => x.SampleCount != sampleCount))
-            throw new InvalidDataException(
-                "All waveform rows in a row-based CSV must contain the same number of samples.");
 
         return result;
     }
