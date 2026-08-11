@@ -5,10 +5,17 @@ namespace PulseInspector.Services;
 public sealed class GroupInspectionService
 {
     private readonly InspectionService _inspectionService;
+    private readonly SubgroupInspectionService _subgroupInspectionService;
+    private readonly GroupDecisionService _decisionService;
 
-    public GroupInspectionService(InspectionService? inspectionService = null)
+    public GroupInspectionService(
+        InspectionService? inspectionService = null,
+        SubgroupInspectionService? subgroupInspectionService = null,
+        GroupDecisionService? decisionService = null)
     {
         _inspectionService = inspectionService ?? new InspectionService();
+        _subgroupInspectionService = subgroupInspectionService ?? new SubgroupInspectionService(_inspectionService);
+        _decisionService = decisionService ?? new GroupDecisionService();
     }
 
     public InspectionModel Train(IEnumerable<GroupData> normalGroups, double confidence = 0.999)
@@ -19,8 +26,6 @@ public sealed class GroupInspectionService
             .Select(GetGroupFeatures)
             .ToArray();
 
-        // Six statistical dimensions require at least seven independent
-        // group observations for a full-rank sample covariance matrix.
         var minimumGroups = FeatureVector.StatisticalFeatureNames.Count + 1;
         if (groupFeatures.Length < minimumGroups)
             throw new InvalidOperationException(
@@ -29,32 +34,25 @@ public sealed class GroupInspectionService
         return _inspectionService.Train(groupFeatures, confidence);
     }
 
-    public GroupInspectionResult Inspect(GroupData group, InspectionModel model)
+    public GroupInspectionResult Inspect(
+        GroupData group,
+        InspectionModel model,
+        GroupDecisionPolicy? decisionPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(model);
 
         var features = GetGroupFeatures(group);
-        var result = _inspectionService.Inspect(features, model);
+        var meanResult = _inspectionService.Inspect(features, model);
+        var subgroupResults = _subgroupInspectionService.Inspect(group, model);
 
-        return new GroupInspectionResult(
-            group.Id,
-            result.IsDefect,
-            group.SampleCount,
-            result.MahalanobisDistance,
-            result.Threshold,
-            result.Features,
-            result.Message);
+        return _decisionService.CreateResult(group, meanResult, subgroupResults, decisionPolicy);
     }
 
     private static FeatureVector GetGroupFeatures(GroupData group)
     {
-        if (group.Features.Count == 0)
-            throw new InvalidOperationException($"Group '{group.Id}' contains no extracted features.");
-
-        if (group.Features.Count != group.Waveforms.Count)
-            throw new InvalidOperationException(
-                $"Group '{group.Id}' has {group.Waveforms.Count} waveforms but {group.Features.Count} feature vectors.");
+        if (group.Records.Count == 0)
+            throw new InvalidOperationException($"Group '{group.Id}' contains no records.");
 
         var mean = group.MeanFeatures();
         return mean ?? throw new InvalidOperationException($"Group '{group.Id}' contains no valid features.");
