@@ -15,18 +15,27 @@ public sealed class InspectionService
             throw new ArgumentOutOfRangeException(nameof(confidence), "Confidence must be between 0 and 1.");
 
         var samples = vectors.Select(v => v.Clone()).ToArray();
-        var validation = _trainingValidation.Validate(samples);
-        var errors = validation.Issues.Where(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)).ToArray();
-        if (errors.Length > 0)
-            throw new InvalidOperationException("Training data validation failed: " + string.Join("; ", errors.Select(e => e.Message)));
+        if (samples.Length == 0)
+            throw new InvalidOperationException("At least one training feature vector is required.");
 
+        // ZScore is a derived feature. It must be calculated from the complete
+        // training Peak distribution before validation/covariance construction.
         var peakValues = samples.Select(v => v["Peak"]).ToArray();
+        if (peakValues.Any(v => !double.IsFinite(v)))
+            throw new InvalidOperationException("Training Peak values contain NaN or Infinity.");
+
         var peakMean = peakValues.Average();
         var peakStd = StandardDeviation(peakValues, peakMean);
         if (peakStd <= 0) peakStd = 1e-12;
 
         foreach (var sample in samples)
             sample["ZScore"] = (sample["Peak"] - peakMean) / peakStd;
+
+        // Validate only after all derived statistical features have been populated.
+        var validation = _trainingValidation.Validate(samples);
+        var errors = validation.Issues.Where(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)).ToArray();
+        if (errors.Length > 0)
+            throw new InvalidOperationException("Training data validation failed: " + string.Join("; ", errors.Select(e => e.Message)));
 
         var rows = samples.Select(v => v.ToStatisticalArray()).ToArray();
         var mean = StatisticsService.Mean(rows);
