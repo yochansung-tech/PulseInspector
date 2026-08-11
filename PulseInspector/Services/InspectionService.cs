@@ -4,14 +4,21 @@ namespace PulseInspector.Services;
 
 public sealed class InspectionService
 {
+    private readonly TrainingValidationService _trainingValidation = new();
+
+    public TrainingValidationResult ValidateTraining(IEnumerable<FeatureVector> vectors) =>
+        _trainingValidation.Validate(vectors);
+
     public InspectionModel Train(IEnumerable<FeatureVector> vectors, double confidence = 0.999)
     {
         if (confidence <= 0 || confidence >= 1)
             throw new ArgumentOutOfRangeException(nameof(confidence), "Confidence must be between 0 and 1.");
 
         var samples = vectors.Select(v => v.Clone()).ToArray();
-        if (samples.Length < 2)
-            throw new InvalidOperationException("At least two training samples are required.");
+        var validation = _trainingValidation.Validate(samples);
+        var errors = validation.Issues.Where(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)).ToArray();
+        if (errors.Length > 0)
+            throw new InvalidOperationException("Training data validation failed: " + string.Join("; ", errors.Select(e => e.Message)));
 
         var peakValues = samples.Select(v => v["Peak"]).ToArray();
         var peakMean = peakValues.Average();
@@ -57,9 +64,7 @@ public sealed class InspectionService
         if (statisticalValues.Length != model.Mean.Length)
             throw new InvalidOperationException("FeatureVector and InspectionModel dimensions do not match.");
 
-        var distance = StatisticsService.Mahalanobis(
-            statisticalValues, model.Mean, model.InverseCovariance);
-
+        var distance = StatisticsService.Mahalanobis(statisticalValues, model.Mean, model.InverseCovariance);
         var defect = distance > model.Threshold;
         vector["MahalanobisDistance"] = distance;
         vector["Threshold"] = model.Threshold;
