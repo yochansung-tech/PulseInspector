@@ -60,7 +60,7 @@ public sealed class GroupDecisionService
         return new GroupInspectionResult(
             group.Id,
             finalDefect,
-            group.SampleCount,
+            group.RecordCount,
             meanResult.MahalanobisDistance,
             meanResult.Threshold,
             meanResult.Features,
