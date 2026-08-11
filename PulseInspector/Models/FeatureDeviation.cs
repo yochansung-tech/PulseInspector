@@ -3,8 +3,8 @@ namespace PulseInspector.Models;
 public sealed record FeatureDeviation(
     string FeatureName,
     double Value,
-    double ReferenceMean,
-    double ReferenceStandardDeviation,
+    double Mean,
+    double StandardDeviation,
     double ZScore,
     double AbsoluteZScore,
-    double Contribution);
+    double MahalanobisContribution);
