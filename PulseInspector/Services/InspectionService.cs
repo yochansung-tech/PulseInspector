@@ -13,7 +13,6 @@ public sealed class InspectionService
         if (samples.Length < 2)
             throw new InvalidOperationException("At least two training samples are required.");
 
-        // Z-score is defined from the training distribution of Peak.
         var peakValues = samples.Select(v => v["Peak"]).ToArray();
         var peakMean = peakValues.Average();
         var peakStd = StandardDeviation(peakValues, peakMean);
@@ -24,13 +23,20 @@ public sealed class InspectionService
 
         var rows = samples.Select(v => v.ToStatisticalArray()).ToArray();
         var mean = StatisticsService.Mean(rows);
-        var inverse = StatisticsService.Invert(StatisticsService.Covariance(rows));
+        var covariance = StatisticsService.Covariance(rows);
+        var inverse = StatisticsService.Invert(covariance);
+        var standardDeviations = Enumerable.Range(0, covariance.GetLength(0))
+            .Select(i => Math.Sqrt(Math.Max(covariance[i, i], 0.0)))
+            .Select(x => x > 0 ? x : 1e-12)
+            .ToArray();
         var threshold = StatisticsService.ChiSquareQuantile(FeatureVector.StatisticalFeatureNames.Count, confidence);
 
         return new InspectionModel
         {
             Mean = mean,
+            Covariance = covariance,
             InverseCovariance = inverse,
+            StandardDeviations = standardDeviations,
             PeakMean = peakMean,
             PeakStandardDeviation = peakStd,
             Confidence = confidence,
@@ -47,19 +53,13 @@ public sealed class InspectionService
         vector["ZScore"] = (vector["Peak"] - model.PeakMean) / peakStd;
 
         var distance = StatisticsService.Mahalanobis(
-            vector.ToStatisticalArray(),
-            model.Mean,
-            model.InverseCovariance);
+            vector.ToStatisticalArray(), model.Mean, model.InverseCovariance);
 
         var defect = distance > model.Threshold;
         vector["MahalanobisDistance"] = distance;
         vector["Threshold"] = model.Threshold;
 
-        return new InspectionResult(
-            defect,
-            distance,
-            model.Threshold,
-            vector,
+        return new InspectionResult(defect, distance, model.Threshold, vector,
             defect ? "Abnormal group" : "Normal group");
     }
 
