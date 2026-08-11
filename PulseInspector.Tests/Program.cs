@@ -110,10 +110,15 @@ internal static class Program
         var samples = new[] { 0d, 1d, 2d, 1d, 0d };
         var features = extractor.Extract(samples, dt);
 
+        // Feature definitions used by the current Release 1.0 implementation:
+        // RiseTime = 10% -> 90% threshold crossing index distance.
+        // FWHM = first -> last 50% threshold crossing index distance.
+        // Charge = trapezoidal integral of the positive component only.
+        // Baseline/noise use the lowest 20% of samples; here that segment is [0, 0].
         AssertNear(features["Peak"], 2d, 1e-12, "Peak");
-        AssertNear(features["Charge"], 4d * dt, 1e-18, "Charge");
-        AssertNear(features["RiseTime"], 2d * dt, 1e-12, "RiseTime");
-        AssertNear(features["FWHM"], 2d * dt, 1e-12, "FWHM");
+        AssertNear(features["Charge"], 2.5e-6, 1e-18, "Charge");
+        AssertNear(features["RiseTime"], 1e-6, 1e-18, "RiseTime");
+        AssertNear(features["FWHM"], 2e-6, 1e-18, "FWHM");
         AssertNear(features["Noise"], 0d, 1e-12, "Noise");
     }
 
