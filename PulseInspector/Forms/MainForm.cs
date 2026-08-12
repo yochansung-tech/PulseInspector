@@ -6,7 +6,7 @@ using PulseInspector.Services;
 
 namespace PulseInspector.Forms;
 
-public sealed class MainForm : Form
+public sealed partial class MainForm : Form
 {
     private readonly WaveformControl _waveform = new();
     private readonly FeatureGrid _features = new();
@@ -104,7 +104,6 @@ public sealed class MainForm : Form
         var vectors = GetTrainingFeatures(normalGroups);
         report = _trainingValidationService.Validate(vectors);
         if (report.IsValid) return true;
-
         var lines = report.Issues.Select(i => $"• {(string.IsNullOrWhiteSpace(i.FeatureName) ? "Training" : i.FeatureName)}: {i.Message}");
         MessageBox.Show(this, string.Join(Environment.NewLine, lines), "Training data validation failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         _status.SetState(false, $"Training validation failed: {report.Issues.Count} issue(s)");
