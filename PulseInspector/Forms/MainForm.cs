@@ -18,6 +18,7 @@ public sealed class MainForm : Form
     private readonly GroupInspectionService _groupService = new();
     private readonly SubgroupInspectionService _subgroupService = new();
     private readonly FeatureDeviationService _deviationService = new();
+    private readonly InspectionSelectionService _selectionService = new();
     private readonly GroupDecisionService _decisionService = new();
     private readonly TrainingValidationService _trainingValidationService = new();
     private readonly List<GroupData> _groups = new();
@@ -152,7 +153,7 @@ public sealed class MainForm : Form
     private void PopulateSubgroupResults(GroupData group)
     {
         _subgroupResults.Clear(); _subgroupList.Items.Clear(); if (_model is null) return; _subgroupResults.AddRange(_subgroupService.Inspect(group, _model));
-        foreach (var result in _subgroupResults) { var item = new ListViewItem(result.Index.ToString()); item.SubItems.Add(result.SourceName); item.SubItems.Add(result.MahalanobisDistance.ToString("F6")); item.SubItems.Add(result.Threshold.ToString("F6")); item.SubItems.Add(result.IsDefect ? "DEFECT" : "NORMAL"); item.Tag = result.Index - 1; _subgroupList.Items.Add(item); }
+        foreach (var row in _selectionService.CreateRows(_subgroupResults)) { var item = new ListViewItem(row.Index.ToString()); item.SubItems.Add(row.SourceName); item.SubItems.Add(row.MahalanobisDistance.ToString("F6")); item.SubItems.Add(row.Threshold.ToString("F6")); item.SubItems.Add(row.IsDefect ? "DEFECT" : "NORMAL"); item.Tag = row.Index - 1; _subgroupList.Items.Add(item); }
     }
 
     private void ShowSelectedGroup()
@@ -162,7 +163,11 @@ public sealed class MainForm : Form
 
     private void ShowSelectedSubgroup()
     {
-        if (_groupList.SelectedIndex < 0 || _subgroupList.SelectedIndices.Count == 0) return; var group = _groups[_groupList.SelectedIndex]; var row = _subgroupList.SelectedItems[0]; if (row.Tag is not int recordIndex || recordIndex < 0 || recordIndex >= group.Records.Count) return; var record = group.Records[recordIndex]; _waveform.SetData(record.Samples); _features.SetFeatures(record.Features); if (_model is not null) _deviations.SetResults(_deviationService.Analyze(record.Features, _model)); var result = _subgroupResults.FirstOrDefault(r => r.Index == recordIndex + 1); _status.SetState(result is null || !result.IsDefect, result is null ? $"Subgroup {recordIndex + 1}: {record.SourceName}" : $"Subgroup {result.Index}: {(result.IsDefect ? "DEFECT" : "NORMAL")} | MD={result.MahalanobisDistance:F6}, Threshold={result.Threshold:F6}");
+        if (_groupList.SelectedIndex < 0 || _subgroupList.SelectedIndices.Count == 0 || _model is null) return;
+        var group = _groups[_groupList.SelectedIndex]; var row = _subgroupList.SelectedItems[0]; if (row.Tag is not int recordIndex) return;
+        var selected = _selectionService.Select(group, recordIndex, _subgroupResults, _model);
+        _waveform.SetData(selected.Record.Samples); _features.SetFeatures(selected.Record.Features); _deviations.SetResults(selected.Deviations);
+        var result = selected.Result; _status.SetState(result is null || !result.IsDefect, result is null ? $"Subgroup {recordIndex + 1}: {selected.Record.SourceName}" : $"Subgroup {result.Index}: {(result.IsDefect ? "DEFECT" : "NORMAL")} | MD={result.MahalanobisDistance:F6}, Threshold={result.Threshold:F6}");
     }
 
     private void UpdateSelectedGroupLabel()
