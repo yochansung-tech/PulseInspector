@@ -10,7 +10,7 @@ public sealed record SubgroupDisplayRow(
     bool IsDefect);
 
 public sealed record SelectedSubgroupInspection(
-    GroupData.RecordData Record,
+    WaveformRecord Record,
     SubgroupInspectionResult? Result,
     IReadOnlyList<FeatureDeviation> Deviations);
 
@@ -41,8 +41,8 @@ public sealed class InspectionSelectionService
         IReadOnlyList<SubgroupInspectionResult> results,
         InspectionModel model)
     {
-        if (group is null) throw new ArgumentNullException(nameof(group));
-        if (model is null) throw new ArgumentNullException(nameof(model));
+        ArgumentNullException.ThrowIfNull(group);
+        ArgumentNullException.ThrowIfNull(model);
         if (recordIndex < 0 || recordIndex >= group.Records.Count)
             throw new ArgumentOutOfRangeException(nameof(recordIndex));
 
