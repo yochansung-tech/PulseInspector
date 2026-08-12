@@ -77,8 +77,15 @@ internal static class Program
             var rows = loader.LoadRows(path, new CsvImportOptions { SampleIntervalSeconds = 1e-6 });
             Assert(rows.Count == 2, "End-to-end row loading failed.");
             var group = new GroupData();
-            foreach (var row in rows)
-                group.AddWaveform(row.Samples, CreateFeatures(row.Samples.Max()), row.Source, row.SampleIntervalSeconds);
+            for (var index = 0; index < rows.Count; index++)
+            {
+                var row = rows[index];
+                group.AddWaveform(
+                    row.Samples,
+                    CreateFeatures(row.Samples.Max()),
+                    $"row-{index + 1}",
+                    row.SampleIntervalSeconds);
+            }
             Assert(group.RecordCount == 2, "End-to-end GroupData record count is incorrect.");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
