@@ -29,6 +29,14 @@ public sealed class FeatureDeviationGrid : UserControl
         Controls.Add(_grid);
     }
 
+    public int RowCount => _grid.Rows.Count;
+
+    public IReadOnlyList<string> DisplayedFeatureNames => _grid.Rows
+        .Cast<DataGridViewRow>()
+        .Where(row => row.Cells.Count > 0 && row.Cells[0].Value is not null)
+        .Select(row => row.Cells[0].Value!.ToString()!)
+        .ToArray();
+
     public void SetResults(IEnumerable<FeatureDeviation> results)
     {
         _grid.Rows.Clear();
