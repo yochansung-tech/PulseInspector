@@ -6,6 +6,14 @@ public sealed class InspectionService
 {
     private readonly TrainingValidationService _trainingValidation = new();
 
+    // Small diagonal shrinkage stabilizes the covariance inverse without
+    // changing the physical meaning of the five independent features.
+    private const double CovarianceRegularization = 1e-6;
+
+    public InspectionService()
+    {
+    }
+
     public TrainingValidationResult ValidateTraining(IEnumerable<FeatureVector> vectors) =>
         _trainingValidation.Validate(vectors);
 
@@ -18,34 +26,52 @@ public sealed class InspectionService
         if (samples.Length == 0)
             throw new InvalidOperationException("At least one training feature vector is required.");
 
-        // ZScore is a derived feature. It must be calculated from the complete
-        // training Peak distribution before validation/covariance construction.
-        var peakValues = samples.Select(v => v["Peak"]).ToArray();
-        if (peakValues.Any(v => !double.IsFinite(v)))
-            throw new InvalidOperationException("Training Peak values contain NaN or Infinity.");
-
-        var peakMean = peakValues.Average();
-        var peakStd = StandardDeviation(peakValues, peakMean);
-        if (peakStd <= 0) peakStd = 1e-12;
-
-        foreach (var sample in samples)
-            sample["ZScore"] = (sample["Peak"] - peakMean) / peakStd;
-
-        // Validate only after all derived statistical features have been populated.
         var validation = _trainingValidation.Validate(samples);
-        var errors = validation.Issues.Where(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)).ToArray();
+        var errors = validation.Issues
+            .Where(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal))
+            .ToArray();
         if (errors.Length > 0)
-            throw new InvalidOperationException("Training data validation failed: " + string.Join("; ", errors.Select(e => e.Message)));
+            throw new InvalidOperationException(
+                "Training data validation failed: " + string.Join("; ", errors.Select(e => e.Message)));
 
-        var rows = samples.Select(v => v.ToStatisticalArray()).ToArray();
-        var mean = StatisticsService.Mean(rows);
-        var covariance = StatisticsService.Covariance(rows);
+        var rawRows = samples.Select(v => v.ToStatisticalArray()).ToArray();
+        var featureCount = FeatureVector.StatisticalFeatureCount;
+
+        // Standardize every independent feature using the training distribution.
+        // This removes the severe A / A*s / s scale differences before covariance.
+        var featureMeans = Enumerable.Range(0, featureCount)
+            .Select(i => rawRows.Average(row => row[i]))
+            .ToArray();
+
+        var featureScales = Enumerable.Range(0, featureCount)
+            .Select(i => SampleStandardDeviation(rawRows.Select(row => row[i]).ToArray(), featureMeans[i]))
+            .Select(scale => scale > 0 && double.IsFinite(scale) ? scale : 1e-12)
+            .ToArray();
+
+        var standardizedRows = rawRows
+            .Select(row => Standardize(row, featureMeans, featureScales))
+            .ToArray();
+
+        var mean = StatisticsService.Mean(standardizedRows);
+        var covariance = StatisticsService.Covariance(standardizedRows);
+
+        // Ridge/shrinkage regularization keeps the inverse stable when two
+        // physical features are strongly correlated in a normal population.
+        for (var i = 0; i < featureCount; i++)
+            covariance[i, i] += CovarianceRegularization;
+
         var inverse = StatisticsService.Invert(covariance);
-        var standardDeviations = Enumerable.Range(0, FeatureVector.StatisticalFeatureCount)
+        var standardDeviations = Enumerable.Range(0, featureCount)
             .Select(i => Math.Sqrt(Math.Max(covariance[i, i], 0.0)))
             .Select(x => x > 0 ? x : 1e-12)
             .ToArray();
-        var threshold = StatisticsService.ChiSquareQuantile(FeatureVector.StatisticalFeatureCount, confidence);
+
+        var threshold = StatisticsService.ChiSquareQuantile(featureCount, confidence);
+
+        var peakIndex = FeatureVector.GetStatisticalIndex("Peak");
+        var peakValues = rawRows.Select(row => row[peakIndex]).ToArray();
+        var peakMean = featureMeans[peakIndex];
+        var peakStd = featureScales[peakIndex];
 
         var model = new InspectionModel
         {
@@ -53,11 +79,14 @@ public sealed class InspectionService
             Covariance = covariance,
             InverseCovariance = inverse,
             StandardDeviations = standardDeviations,
+            FeatureMeans = featureMeans,
+            FeatureScales = featureScales,
             PeakMean = peakMean,
             PeakStandardDeviation = peakStd,
             Confidence = confidence,
             Threshold = threshold
         };
+
         model.ValidateFeatureOrder();
         return model;
     }
@@ -66,23 +95,47 @@ public sealed class InspectionService
     {
         model.ValidateFeatureOrder();
 
-        var peakStd = model.PeakStandardDeviation <= 0 ? 1e-12 : model.PeakStandardDeviation;
+        var peakStd = model.PeakStandardDeviation > 0 ? model.PeakStandardDeviation : 1e-12;
         vector["ZScore"] = (vector["Peak"] - model.PeakMean) / peakStd;
 
-        var statisticalValues = vector.ToStatisticalArray();
-        if (statisticalValues.Length != model.Mean.Length)
+        var rawValues = vector.ToStatisticalArray();
+        if (rawValues.Length != model.Mean.Length)
             throw new InvalidOperationException("FeatureVector and InspectionModel dimensions do not match.");
 
-        var distance = StatisticsService.Mahalanobis(statisticalValues, model.Mean, model.InverseCovariance);
+        var standardizedValues = Standardize(rawValues, model.FeatureMeans, model.FeatureScales);
+        var distance = StatisticsService.Mahalanobis(
+            standardizedValues, model.Mean, model.InverseCovariance);
+
         var defect = distance > model.Threshold;
         vector["MahalanobisDistance"] = distance;
         vector["Threshold"] = model.Threshold;
 
-        return new InspectionResult(defect, distance, model.Threshold, vector,
+        return new InspectionResult(
+            defect,
+            distance,
+            model.Threshold,
+            vector,
             defect ? "Abnormal group" : "Normal group");
     }
 
-    private static double StandardDeviation(IReadOnlyList<double> values, double mean)
+    private static double[] Standardize(
+        IReadOnlyList<double> values,
+        IReadOnlyList<double> means,
+        IReadOnlyList<double> scales)
+    {
+        if (values.Count != means.Count || values.Count != scales.Count)
+            throw new ArgumentException("Feature standardization dimensions do not match.");
+
+        var result = new double[values.Count];
+        for (var i = 0; i < values.Count; i++)
+        {
+            var scale = scales[i] > 0 ? scales[i] : 1e-12;
+            result[i] = (values[i] - means[i]) / scale;
+        }
+        return result;
+    }
+
+    private static double SampleStandardDeviation(IReadOnlyList<double> values, double mean)
     {
         if (values.Count < 2) return 0;
         var sum = values.Sum(x => (x - mean) * (x - mean));
