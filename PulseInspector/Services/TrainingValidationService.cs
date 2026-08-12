@@ -39,17 +39,40 @@ public sealed class TrainingValidationService
             }
 
             if (values.Length == 0) continue;
+
             var mean = values.Average();
             var variance = values.Length > 1
                 ? values.Sum(x => (x - mean) * (x - mean)) / (values.Length - 1)
                 : 0.0;
             var std = Math.Sqrt(Math.Max(variance, 0));
-            var scale = Math.Max(Math.Abs(mean), 1.0);
 
-            if (std <= scale * 1e-12)
-                issues.Add(new TrainingValidationIssue(feature, "ERROR_ZERO_VARIANCE", "Feature variance is effectively zero; covariance model may be singular.", std));
-            else if (std <= scale * 1e-6)
-                issues.Add(new TrainingValidationIssue(feature, "WARN_LOW_VARIANCE", "Feature variance is very small relative to its scale.", std));
+            // Features have very different physical scales. For example, Charge
+            // is an integral (A*s) and can legitimately be much smaller than 1,
+            // while Peak is expressed in uA. Using max(abs(mean), 1.0) made all
+            // small-valued physical features look artificially low-variance.
+            // Scale must therefore be derived from the feature itself.
+            var maxAbs = values.Max(x => Math.Abs(x));
+            var scale = Math.Max(Math.Abs(mean), maxAbs);
+            scale = Math.Max(scale, 1e-30);
+
+            var relativeStd = std / scale;
+
+            if (relativeStd <= 1e-12)
+            {
+                issues.Add(new TrainingValidationIssue(
+                    feature,
+                    "ERROR_ZERO_VARIANCE",
+                    "Feature variance is effectively zero relative to its own scale; covariance model may be singular.",
+                    std));
+            }
+            else if (relativeStd <= 1e-6)
+            {
+                issues.Add(new TrainingValidationIssue(
+                    feature,
+                    "WARN_LOW_VARIANCE",
+                    "Feature variance is very small relative to its own scale.",
+                    std));
+            }
         }
 
         var duplicateCount = CountDuplicateRows(samples);
