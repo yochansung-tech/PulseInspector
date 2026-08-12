@@ -44,6 +44,7 @@ internal static class FeatureDeviationTests
         FeatureDeviationGridTests.Run();
         InspectionSelectionServiceTests.Run();
         InspectionCsvExporterTests.Run();
+        WinFormsSmokeTest.Run();
     }
 
     private static double ComputeMahalanobisSquared(FeatureVector vector, InspectionModel model)
