@@ -24,7 +24,7 @@ public sealed partial class MainForm : Form
     private readonly List<GroupData> _groups = new();
     private readonly List<SubgroupInspectionResult> _subgroupResults = new();
     private readonly ListBox _groupList = new() { Dock = DockStyle.Fill };
-    private readonly ListView _subgroupList = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, HideSelection = false };
+    private readonly ListView _subgroupList = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, HideSelection = false, Sorting = SortOrder.None };
     private readonly CheckBox _defective = new() { Text = "Selected group is defective", Dock = DockStyle.Top, Height = 28 };
     private readonly Label _subgroupHeader = new() { Text = "Subgroups", Dock = DockStyle.Top, Height = 28, TextAlign = ContentAlignment.MiddleLeft };
     private InspectionModel? _model;
@@ -32,6 +32,8 @@ public sealed partial class MainForm : Form
     private double _confidence = 0.999;
     private double _sampleIntervalSeconds = 2.56e-6 / 64.0;
     private bool _updatingDefective;
+    private int _subgroupSortColumn = -1;
+    private SortOrder _subgroupSortOrder = SortOrder.None;
 
     public MainForm()
     {
@@ -47,13 +49,46 @@ public sealed partial class MainForm : Form
         var settings = new ToolStripMenuItem("Settings"); settings.Click += (_, _) => EditSettings(); menu.Items.Add(settings);
         var about = new ToolStripMenuItem("About"); about.Click += (_, _) => new AboutForm().ShowDialog(this); menu.Items.Add(about);
         Controls.Add(menu); MainMenuStrip = menu;
-        _groupList.SelectedIndexChanged += (_, _) => ShowSelectedGroup(); _subgroupList.SelectedIndexChanged += (_, _) => ShowSelectedSubgroup(); _defective.CheckedChanged += (_, _) => UpdateSelectedGroupLabel();
+        _groupList.SelectedIndexChanged += (_, _) => ShowSelectedGroup(); _subgroupList.SelectedIndexChanged += (_, _) => ShowSelectedSubgroup(); _subgroupList.ColumnClick += SubgroupListColumnClick; _defective.CheckedChanged += (_, _) => UpdateSelectedGroupLabel();
         _subgroupList.Columns.Add("#", 50); _subgroupList.Columns.Add("Source", 180); _subgroupList.Columns.Add("Mahalanobis", 110); _subgroupList.Columns.Add("Threshold", 110); _subgroupList.Columns.Add("Result", 90);
         var groupPanel = new Panel { Dock = DockStyle.Left, Width = 300, Padding = new Padding(8) }; groupPanel.Controls.Add(_groupList); groupPanel.Controls.Add(_defective);
         var center = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4) }; var subgroupPanel = new Panel { Dock = DockStyle.Bottom, Height = 220 }; subgroupPanel.Controls.Add(_subgroupList); subgroupPanel.Controls.Add(_subgroupHeader);
         var analysisSplit = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 400 }; var waveformFeatureSplit = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, SplitterDistance = 850 };
         waveformFeatureSplit.Panel1.Controls.Add(_waveform); waveformFeatureSplit.Panel2.Controls.Add(_features); analysisSplit.Panel1.Controls.Add(waveformFeatureSplit); analysisSplit.Panel2.Controls.Add(_deviations); center.Controls.Add(analysisSplit); center.Controls.Add(subgroupPanel); Controls.Add(center); Controls.Add(groupPanel);
         var status = new Panel { Dock = DockStyle.Bottom, Height = 34 }; status.Controls.Add(_status); Controls.Add(status);
+    }
+
+    private void SubgroupListColumnClick(object? sender, ColumnClickEventArgs e)
+    {
+        if (_subgroupList.Items.Count == 0) return;
+
+        if (_subgroupSortColumn == e.Column)
+        {
+            _subgroupSortOrder = _subgroupSortOrder == SortOrder.Ascending
+                ? SortOrder.Descending
+                : SortOrder.Ascending;
+        }
+        else
+        {
+            _subgroupSortColumn = e.Column;
+            _subgroupSortOrder = SortOrder.Ascending;
+        }
+
+        _subgroupList.ListViewItemSorter = new SubgroupListViewItemComparer(e.Column, _subgroupSortOrder);
+        _subgroupList.Sort();
+        UpdateSubgroupColumnHeaders();
+    }
+
+    private void UpdateSubgroupColumnHeaders()
+    {
+        var names = new[] { "#", "Source", "Mahalanobis", "Threshold", "Result" };
+        for (var i = 0; i < _subgroupList.Columns.Count && i < names.Length; i++)
+        {
+            var marker = i == _subgroupSortColumn
+                ? (_subgroupSortOrder == SortOrder.Ascending ? " ▲" : " ▼")
+                : string.Empty;
+            _subgroupList.Columns[i].Text = names[i] + marker;
+        }
     }
 
     private void EditSettings()
@@ -91,46 +126,21 @@ public sealed partial class MainForm : Form
         try
         {
             var loadedGroups = new List<(string FileName, GroupData Group)>();
-
-            // Each selected Row-based CSV file becomes one Group.
-            // Rows inside that file remain Subgroups of that Group.
             foreach (var file in dialog.FileNames)
             {
-                var rows = _csvRowLoader.LoadRows(
-                    file,
-                    new CsvImportOptions { SampleIntervalSeconds = _sampleIntervalSeconds });
-
-                if (rows.Count == 0)
-                    throw new InvalidOperationException($"CSV file '{Path.GetFileName(file)}' contains no waveform rows.");
-
+                var rows = _csvRowLoader.LoadRows(file, new CsvImportOptions { SampleIntervalSeconds = _sampleIntervalSeconds });
+                if (rows.Count == 0) throw new InvalidOperationException($"CSV file '{Path.GetFileName(file)}' contains no waveform rows.");
                 var group = new GroupData();
                 foreach (var data in rows)
                 {
-                    group.AddWaveform(
-                        data.Samples,
-                        _extractor.Extract(data.Samples, data.SampleIntervalSeconds),
-                        data.SourceName,
-                        data.SampleIntervalSeconds,
-                        data.HasExplicitTimeAxis);
+                    group.AddWaveform(data.Samples, _extractor.Extract(data.Samples, data.SampleIntervalSeconds), data.SourceName, data.SampleIntervalSeconds, data.HasExplicitTimeAxis);
                 }
-
                 loadedGroups.Add((file, group));
             }
-
-            // Add all groups only after every selected file has loaded successfully.
-            // This prevents a partial multi-file import when one file is invalid.
-            foreach (var item in loadedGroups)
-                AddGroupToUi(item.Group);
-
-            _status.SetState(
-                true,
-                $"Loaded {loadedGroups.Count} group(s) from {loadedGroups.Count} CSV file(s), " +
-                $"{loadedGroups.Sum(x => x.Group.RecordCount)} subgroup waveform(s)");
+            foreach (var item in loadedGroups) AddGroupToUi(item.Group);
+            _status.SetState(true, $"Loaded {loadedGroups.Count} group(s) from {loadedGroups.Count} CSV file(s), {loadedGroups.Sum(x => x.Group.RecordCount)} subgroup waveform(s)");
         }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Row-based CSV load error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Row-based CSV load error", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 
     private void AddGroupToUi(GroupData group)
@@ -202,6 +212,12 @@ public sealed partial class MainForm : Form
     {
         _subgroupResults.Clear(); _subgroupList.Items.Clear(); if (_model is null) return; _subgroupResults.AddRange(_subgroupService.Inspect(group, _model));
         foreach (var row in _selectionService.CreateRows(_subgroupResults)) { var item = new ListViewItem(row.Index.ToString()); item.SubItems.Add(row.SourceName); item.SubItems.Add(row.MahalanobisDistance.ToString("F6")); item.SubItems.Add(row.Threshold.ToString("F6")); item.SubItems.Add(row.IsDefect ? "DEFECT" : "NORMAL"); item.Tag = row.Index - 1; _subgroupList.Items.Add(item); }
+        if (_subgroupSortColumn >= 0 && _subgroupSortOrder != SortOrder.None)
+        {
+            _subgroupList.ListViewItemSorter = new SubgroupListViewItemComparer(_subgroupSortColumn, _subgroupSortOrder);
+            _subgroupList.Sort();
+            UpdateSubgroupColumnHeaders();
+        }
     }
 
     private void ShowSelectedGroup()
@@ -230,4 +246,42 @@ public sealed partial class MainForm : Form
 
     private static string ShortId(GroupData group) => group.Id[..8];
     private static string CreateGroupLabel(GroupData group) => $"{ShortId(group)} | {group.RecordCount} waveform(s) | {(group.IsDefective ? "DEFECT" : "NORMAL")}";
+
+    private sealed class SubgroupListViewItemComparer : System.Collections.IComparer
+    {
+        private readonly int _column;
+        private readonly SortOrder _order;
+
+        public SubgroupListViewItemComparer(int column, SortOrder order)
+        {
+            _column = column;
+            _order = order;
+        }
+
+        public int Compare(object? x, object? y)
+        {
+            if (x is not ListViewItem left || y is not ListViewItem right) return 0;
+
+            var result = _column switch
+            {
+                0 => CompareInt(left.SubItems[0].Text, right.SubItems[0].Text),
+                2 => CompareDouble(left.SubItems[2].Text, right.SubItems[2].Text),
+                3 => CompareDouble(left.SubItems[3].Text, right.SubItems[3].Text),
+                _ => string.Compare(left.SubItems[_column].Text, right.SubItems[_column].Text, StringComparison.CurrentCultureIgnoreCase)
+            };
+
+            return _order == SortOrder.Descending ? -result : result;
+        }
+
+        private static int CompareInt(string left, string right)
+            => int.TryParse(left, out var l) && int.TryParse(right, out var r)
+                ? l.CompareTo(r)
+                : string.Compare(left, right, StringComparison.CurrentCultureIgnoreCase);
+
+        private static int CompareDouble(string left, string right)
+            => double.TryParse(left, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var l) &&
+               double.TryParse(right, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var r)
+                ? l.CompareTo(r)
+                : string.Compare(left, right, StringComparison.CurrentCultureIgnoreCase);
+    }
 }
