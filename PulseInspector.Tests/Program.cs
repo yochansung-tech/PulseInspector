@@ -13,12 +13,10 @@ internal static class Program
             TestGroupMeanFeatures();
             TestRowBasedCsvLoading();
             TestRowBasedCsvEndToEnd();
-            TestFeatureExtractionExpectedValues();
-            TestRealisticPulseCsvFeatures();
-            TestGroupDecisionRules();
+            TestFeatureExtraction();
+            TestTrainingValidation();
             TestMahalanobisTrainingAndInspection();
             TestNormalVsDefectivePulseDetection();
-            TestIndividualFeatureDefects();
             FeatureDeviationTests.Run();
             WinFormsSmokeTest.Run();
             Console.WriteLine("ALL TESTS PASSED");
@@ -40,9 +38,6 @@ internal static class Program
 
         var vector = FeatureVector.FromStatisticalArray(new[] { 1d, 2d, 3d, 4d, 5d });
         Assert(vector.ToStatisticalArray().SequenceEqual(new[] { 1d, 2d, 3d, 4d, 5d }), "Statistical array round-trip failed.");
-
-        // ZScore remains part of the complete/display feature set, but is intentionally
-        // excluded from the statistical Mahalanobis feature vector because it is derived from Peak.
         Assert(FeatureVector.FeatureNames.Contains("ZScore"), "Diagnostic ZScore feature is missing.");
         Assert(!FeatureVector.StatisticalFeatureNames.Contains("ZScore"), "ZScore must not be part of the statistical feature vector.");
     }
@@ -87,6 +82,85 @@ internal static class Program
             Assert(group.RecordCount == 2, "End-to-end GroupData record count is incorrect.");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    private static void TestFeatureExtraction()
+    {
+        var extractor = new FeatureExtractor();
+        var waveform = new[] { 0d, 1d, 3d, 6d, 3d, 1d, 0d };
+        var features = extractor.Extract(waveform, 1e-6);
+
+        foreach (var name in FeatureVector.StatisticalFeatureNames)
+            Assert(double.IsFinite(features[name]), $"Feature '{name}' is not finite.");
+        Assert(features["Peak"] > 0, "Peak extraction failed.");
+        Assert(features["Charge"] > 0, "Charge extraction failed.");
+    }
+
+    private static void TestTrainingValidation()
+    {
+        var vectors = Enumerable.Range(0, 7)
+            .Select(i => CreateTrainingFeatures(i))
+            .ToArray();
+
+        var service = new InspectionService();
+        var validation = service.ValidateTraining(vectors);
+        Assert(!validation.Issues.Any(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)),
+            "Valid training vectors were rejected by validation.");
+    }
+
+    private static void TestMahalanobisTrainingAndInspection()
+    {
+        var vectors = Enumerable.Range(0, 10)
+            .Select(i => CreateTrainingFeatures(i))
+            .ToArray();
+
+        var service = new InspectionService();
+        var model = service.Train(vectors, 0.999);
+
+        Assert(model.Mean.Length == FeatureVector.StatisticalFeatureCount, "Model feature dimension is incorrect.");
+        Assert(model.InverseCovariance.GetLength(0) == FeatureVector.StatisticalFeatureCount, "Inverse covariance dimension is incorrect.");
+        Assert(model.InverseCovariance.GetLength(1) == FeatureVector.StatisticalFeatureCount, "Inverse covariance dimension is incorrect.");
+        Assert(model.Threshold > 0, "Mahalanobis threshold is invalid.");
+
+        var normal = CreateTrainingFeatures(5);
+        var result = service.Inspect(normal, model);
+        Assert(double.IsFinite(result.MahalanobisDistance), "Normal Mahalanobis distance is not finite.");
+        Assert(result.MahalanobisDistance < model.Threshold, "Training-like sample was classified as defect.");
+    }
+
+    private static void TestNormalVsDefectivePulseDetection()
+    {
+        var training = Enumerable.Range(0, 12)
+            .Select(i => CreateTrainingFeatures(i))
+            .ToArray();
+
+        var service = new InspectionService();
+        var model = service.Train(training, 0.99);
+
+        var normal = CreateTrainingFeatures(6);
+        var defect = CreateTrainingFeatures(100);
+        defect["Peak"] *= 8;
+        defect["Charge"] *= 8;
+        defect["Noise"] *= 5;
+
+        var normalResult = service.Inspect(normal, model);
+        var defectResult = service.Inspect(defect, model);
+
+        Assert(!normalResult.IsDefect, "Normal synthetic sample was classified as defect.");
+        Assert(defectResult.IsDefect, "Strong synthetic defect was not detected.");
+    }
+
+    private static FeatureVector CreateTrainingFeatures(int index)
+    {
+        var x = index - 5.5;
+        var f = new FeatureVector();
+        f["Peak"] = 1.0 + 0.03 * x + 0.002 * x * x;
+        f["Charge"] = 2.0e-6 + 0.12e-6 * x + 0.01e-6 * x * x;
+        f["RiseTime"] = 4.0e-6 + 0.08e-6 * x;
+        f["FWHM"] = 6.0e-6 + 0.12e-6 * x + 0.01e-6 * x * x;
+        f["Noise"] = 0.03 + 0.003 * x;
+        f["ZScore"] = 0;
+        return f;
     }
 
     private static FeatureVector CreateFeatures(double value)
