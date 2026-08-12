@@ -39,7 +39,7 @@ public sealed partial class MainForm : Form
         var menu = new MenuStrip();
         var file = new ToolStripMenuItem("File");
         var addGroup = new ToolStripMenuItem("Add Group from CSV..."); addGroup.Click += (_, _) => AddGroupFromCsv(); file.DropDownItems.Add(addGroup);
-        var addRowGroup = new ToolStripMenuItem("Add Group from CSV Rows..."); addRowGroup.Click += (_, _) => AddGroupFromCsvRows(); file.DropDownItems.Add(addRowGroup);
+        var addRowGroup = new ToolStripMenuItem("Add Groups from CSV Rows..."); addRowGroup.Click += (_, _) => AddGroupsFromCsvRows(); file.DropDownItems.Add(addRowGroup);
         var clear = new ToolStripMenuItem("Clear Groups"); clear.Click += (_, _) => ClearGroups(); file.DropDownItems.Add(clear); menu.Items.Add(file);
         var training = new ToolStripMenuItem("Training");
         var train = new ToolStripMenuItem("Train Normal Groups"); train.Click += (_, _) => TrainModel(); training.DropDownItems.Add(train);
@@ -77,11 +77,60 @@ public sealed partial class MainForm : Form
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Group load error", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 
-    private void AddGroupFromCsvRows()
+    private void AddGroupsFromCsvRows()
     {
-        using var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*", Title = "Select a CSV where each row is one subgroup" }; if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        try { var rows = _csvRowLoader.LoadRows(dialog.FileName, new CsvImportOptions { SampleIntervalSeconds = _sampleIntervalSeconds }); var group = new GroupData(); foreach (var data in rows) group.AddWaveform(data.Samples, _extractor.Extract(data.Samples, data.SampleIntervalSeconds), data.SourceName, data.SampleIntervalSeconds, data.HasExplicitTimeAxis); AddGroupToUi(group); _status.SetState(true, $"Loaded {rows.Count} subgroup row(s) from {Path.GetFileName(dialog.FileName)} | dt={_sampleIntervalSeconds:E3}s"); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Row-based CSV load error", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        using var dialog = new OpenFileDialog
+        {
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            Multiselect = true,
+            Title = "Select one or more CSV files (one row = one subgroup)"
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            var loadedGroups = new List<(string FileName, GroupData Group)>();
+
+            // Each selected Row-based CSV file becomes one Group.
+            // Rows inside that file remain Subgroups of that Group.
+            foreach (var file in dialog.FileNames)
+            {
+                var rows = _csvRowLoader.LoadRows(
+                    file,
+                    new CsvImportOptions { SampleIntervalSeconds = _sampleIntervalSeconds });
+
+                if (rows.Count == 0)
+                    throw new InvalidOperationException($"CSV file '{Path.GetFileName(file)}' contains no waveform rows.");
+
+                var group = new GroupData();
+                foreach (var data in rows)
+                {
+                    group.AddWaveform(
+                        data.Samples,
+                        _extractor.Extract(data.Samples, data.SampleIntervalSeconds),
+                        data.SourceName,
+                        data.SampleIntervalSeconds,
+                        data.HasExplicitTimeAxis);
+                }
+
+                loadedGroups.Add((file, group));
+            }
+
+            // Add all groups only after every selected file has loaded successfully.
+            // This prevents a partial multi-file import when one file is invalid.
+            foreach (var item in loadedGroups)
+                AddGroupToUi(item.Group);
+
+            _status.SetState(
+                true,
+                $"Loaded {loadedGroups.Count} group(s) from {loadedGroups.Count} CSV file(s), " +
+                $"{loadedGroups.Sum(x => x.Group.RecordCount)} subgroup waveform(s)");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Row-based CSV load error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void AddGroupToUi(GroupData group)
