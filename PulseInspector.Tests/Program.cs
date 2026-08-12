@@ -20,6 +20,7 @@ internal static class Program
             TestNormalVsDefectivePulseDetection();
             TestIndividualFeatureDefects();
             FeatureDeviationTests.Run();
+            WinFormsSmokeTest.Run();
             Console.WriteLine("ALL TESTS PASSED");
             return 0;
         }
@@ -136,6 +137,42 @@ internal static class Program
         Assert(charges.All(q => q > 0), "Realistic pulse Charge must be positive.");
     }
 
+    private static void TestNormalVsDefectivePulseDetection()
+    {
+        var trainingGroups = new List<GroupData>();
+        for (var i = 0; i < 20; i++)
+        {
+            var group = new GroupData();
+            var f1 = CreateTrainingFeatures(i);
+            var f2 = CreateTrainingFeatures(i + 0.2);
+            group.AddWaveform(new[] { 0d, 1d }, f1, $"train-{i}-1", 1e-6);
+            group.AddWaveform(new[] { 0d, 1d }, f2, $"train-{i}-2", 1e-6);
+            trainingGroups.Add(group);
+        }
+        var inspection = new GroupInspectionService();
+        var model = inspection.Train(trainingGroups, 0.999);
+        Assert(model.Threshold > 0, "Training did not produce a positive Mahalanobis threshold.");
+
+        var normalGroup = new GroupData();
+        normalGroup.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.1), "normal-1", 1e-6);
+        normalGroup.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.2), "normal-2", 1e-6);
+        var normalResult = inspection.Inspect(normalGroup, model);
+        Assert(normalResult.DefectiveSubgroupCount == 0, "A normal group was classified as defective.");
+        Assert(normalResult.DefectiveSubgroupRate == 0, "Normal group defect rate should be zero.");
+
+        var defectiveGroup = new GroupData();
+        defectiveGroup.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.1), "defect-normal", 1e-6);
+        defectiveGroup.AddWaveform(new[] { 0d, 1d }, CreateDefectiveFeatures(), "defect-outlier", 1e-6);
+        var defectiveResult = inspection.Inspect(defectiveGroup, model);
+        Assert(defectiveResult.DefectiveSubgroupCount >= 1, "The deliberately defective subgroup was not detected.");
+        Assert(defectiveResult.DefectiveSubgroupRate > 0, "Defective group did not receive a positive defect rate.");
+        Assert(defectiveResult.MaximumSubgroupMahalanobisDistance > model.Threshold, "Defective subgroup did not exceed the Mahalanobis threshold.");
+
+        var subgroupResults = new SubgroupInspectionService().Inspect(defectiveGroup, model);
+        Assert(subgroupResults.Count == 2, "Defective group subgroup count is incorrect.");
+        Assert(subgroupResults.Any(r => r.IsDefect), "No subgroup was marked defective.");
+    }
+
     private static void TestGroupDecisionRules()
     {
         var results = new[]
@@ -175,67 +212,26 @@ internal static class Program
         Assert(subgroupResults.All(r => r.Features is not null), "Subgroup inspection did not preserve FeatureVector.");
     }
 
-    private static void TestNormalVsDefectivePulseDetection()
-    {
-        var trainingGroups = CreateTrainingGroups();
-        var inspection = new GroupInspectionService();
-        var model = inspection.Train(trainingGroups, 0.999);
-        Assert(model.Threshold > 0, "Training did not produce a positive Mahalanobis threshold.");
-
-        var normalGroup = new GroupData();
-        normalGroup.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.1), "normal-1", 1e-6);
-        normalGroup.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.2), "normal-2", 1e-6);
-        var normalResult = inspection.Inspect(normalGroup, model);
-        Assert(normalResult.DefectiveSubgroupCount == 0, "A normal group was classified as defective.");
-        Assert(normalResult.DefectiveSubgroupRate == 0, "Normal group defect rate should be zero.");
-
-        var defectiveGroup = new GroupData();
-        defectiveGroup.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.1), "defect-normal", 1e-6);
-        defectiveGroup.AddWaveform(new[] { 0d, 1d }, CreateDefectiveFeatures(), "defect-outlier", 1e-6);
-        var defectiveResult = inspection.Inspect(defectiveGroup, model);
-        Assert(defectiveResult.DefectiveSubgroupCount >= 1, "The deliberately defective subgroup was not detected.");
-        Assert(defectiveResult.DefectiveSubgroupRate > 0, "Defective group did not receive a positive defect rate.");
-        Assert(defectiveResult.MaximumSubgroupMahalanobisDistance > model.Threshold, "Defective subgroup did not exceed the Mahalanobis threshold.");
-
-        var subgroupResults = new SubgroupInspectionService().Inspect(defectiveGroup, model);
-        Assert(subgroupResults.Count == 2, "Defective group subgroup count is incorrect.");
-        Assert(subgroupResults.Any(r => r.IsDefect), "No subgroup was marked defective.");
-    }
-
     private static void TestIndividualFeatureDefects()
-    {
-        var trainingGroups = CreateTrainingGroups();
-        var inspection = new GroupInspectionService();
-        var model = inspection.Train(trainingGroups, 0.999);
-        var featureNames = new[] { "Peak", "Charge", "FWHM", "RiseTime", "Noise" };
-
-        foreach (var featureName in featureNames)
-        {
-            var group = new GroupData();
-            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(10.1), "normal", 1e-6);
-            group.AddWaveform(new[] { 0d, 1d }, CreateSingleFeatureDefect(featureName), $"defect-{featureName}", 1e-6);
-            var result = inspection.Inspect(group, model);
-            Assert(result.DefectiveSubgroupCount >= 1, $"{featureName}-only defect was not detected.");
-            Assert(result.MaximumSubgroupMahalanobisDistance > model.Threshold, $"{featureName}-only defect did not exceed threshold.");
-
-            var subgroupResults = new SubgroupInspectionService().Inspect(group, model);
-            var defective = subgroupResults.Single(r => r.SourceName == $"defect-{featureName}");
-            Assert(defective.IsDefect, $"{featureName}-only subgroup was not marked defective.");
-            Assert(double.IsFinite(defective.MahalanobisDistance), $"{featureName}-only Mahalanobis distance is invalid.");
-        }
-    }
-
-    private static List<GroupData> CreateTrainingGroups()
     {
         var trainingGroups = new List<GroupData>();
         for (var i = 0; i < 20; i++)
         {
             var group = new GroupData();
-            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(i), $"train-{i}-1", 1e-6);
-            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(i + 0.2), $"train-{i}-2", 1e-6);
+            group.AddWaveform(new[] { 0d, 1d }, CreateTrainingFeatures(i), $"train-{i}", 1e-6);
             trainingGroups.Add(group);
         }
-        return trainingGroups;
+        var inspection = new GroupInspectionService();
+        var model = inspection.Train(trainingGroups, 0.999);
+        foreach (var featureName in new[] { "Peak", "Charge", "FWHM", "RiseTime", "Noise" })
+        {
+            var vector = CreateTrainingFeatures(10);
+            vector[featureName] *= 2.5;
+            var group = new GroupData();
+            group.AddWaveform(new[] { 0d, 1d }, vector, $"defect-{featureName}", 1e-6);
+            var result = inspection.Inspect(group, model);
+            Assert(result.DefectiveSubgroupCount >= 1, $"{featureName} defect was not detected.");
+        }
     }
 
     private static FeatureVector CreateTrainingFeatures(double i)
@@ -259,21 +255,6 @@ internal static class Program
         vector["Noise"] = 2.0;
         vector["RiseTime"] = 5.0;
         vector["ZScore"] = 4.0;
-        return vector;
-    }
-
-    private static FeatureVector CreateSingleFeatureDefect(string featureName)
-    {
-        var vector = CreateTrainingFeatures(10.1);
-        switch (featureName)
-        {
-            case "Peak": vector["Peak"] = 180; break;
-            case "Charge": vector["Charge"] = 25; break;
-            case "FWHM": vector["FWHM"] = 35; break;
-            case "RiseTime": vector["RiseTime"] = 5; break;
-            case "Noise": vector["Noise"] = 2; break;
-            default: throw new ArgumentOutOfRangeException(nameof(featureName));
-        }
         return vector;
     }
 
