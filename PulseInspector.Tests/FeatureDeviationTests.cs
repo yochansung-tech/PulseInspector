@@ -49,14 +49,26 @@ internal static class FeatureDeviationTests
 
     private static double ComputeMahalanobisSquared(FeatureVector vector, InspectionModel model)
     {
-        var x = vector.ToStatisticalArray();
-        var centered = new double[x.Length];
-        for (var i = 0; i < x.Length; i++) centered[i] = x[i] - model.Mean[i];
-        var weighted = new double[x.Length];
-        for (var i = 0; i < x.Length; i++)
-            for (var j = 0; j < x.Length; j++) weighted[i] += model.InverseCovariance[i, j] * centered[j];
+        var raw = vector.ToStatisticalArray();
+        var standardized = new double[raw.Length];
+        for (var i = 0; i < raw.Length; i++)
+        {
+            var scale = model.FeatureScales[i] > 0 ? model.FeatureScales[i] : 1e-12;
+            standardized[i] = (raw[i] - model.FeatureMeans[i]) / scale;
+        }
+
+        var centered = new double[standardized.Length];
+        for (var i = 0; i < standardized.Length; i++)
+            centered[i] = standardized[i] - model.Mean[i];
+
+        var weighted = new double[centered.Length];
+        for (var i = 0; i < centered.Length; i++)
+            for (var j = 0; j < centered.Length; j++)
+                weighted[i] += model.InverseCovariance[i, j] * centered[j];
+
         var sum = 0d;
-        for (var i = 0; i < centered.Length; i++) sum += centered[i] * weighted[i];
+        for (var i = 0; i < centered.Length; i++)
+            sum += centered[i] * weighted[i];
         return sum;
     }
 
