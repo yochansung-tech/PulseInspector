@@ -9,7 +9,7 @@ public sealed class TrainingValidationResult
     public int SampleCount { get; init; }
     public int FeatureCount { get; init; }
     public IReadOnlyList<TrainingValidationIssue> Issues { get; init; } = Array.Empty<TrainingValidationIssue>();
-    public bool IsValid => Issues.Count == 0;
+    public bool IsValid => !Issues.Any(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal));
     public bool HasWarnings => Issues.Any(i => i.Code.StartsWith("WARN_", StringComparison.Ordinal));
 }
 
@@ -24,10 +24,14 @@ public sealed class TrainingValidationService
 
         if (samples.Length < required + 1)
         {
-            issues.Add(new TrainingValidationIssue(
-                "", "ERROR_INSUFFICIENT_SAMPLES",
+            issues.Add(new TrainingValidationIssue("", "ERROR_INSUFFICIENT_SAMPLES",
                 $"At least {required + 1} training samples are recommended for a {required}-dimensional covariance model. Current count: {samples.Length}.", samples.Length));
         }
+
+        // ZScore is derived from the complete training Peak distribution. MainForm
+        // performs validation before InspectionService.Train(), so validation must
+        // populate this derived feature itself rather than inspecting its default 0.
+        PopulateZScore(samples, issues);
 
         foreach (var feature in FeatureVector.StatisticalFeatureNames)
         {
@@ -37,7 +41,6 @@ public sealed class TrainingValidationService
                 issues.Add(new TrainingValidationIssue(feature, "ERROR_NONFINITE", "Training data contains NaN or Infinity."));
                 continue;
             }
-
             if (values.Length == 0) continue;
 
             var mean = values.Average();
@@ -46,40 +49,29 @@ public sealed class TrainingValidationService
                 : 0.0;
             var std = Math.Sqrt(Math.Max(variance, 0));
 
-            // Features have very different physical scales. For example, Charge
-            // is an integral (A*s) and can legitimately be much smaller than 1,
-            // while Peak is expressed in uA. Using max(abs(mean), 1.0) made all
-            // small-valued physical features look artificially low-variance.
-            // Scale must therefore be derived from the feature itself.
+            // Each feature has its own physical scale. Charge and time-based
+            // features can legitimately be much smaller than 1.0.
             var maxAbs = values.Max(x => Math.Abs(x));
             var scale = Math.Max(Math.Abs(mean), maxAbs);
             scale = Math.Max(scale, 1e-30);
-
             var relativeStd = std / scale;
 
             if (relativeStd <= 1e-12)
             {
-                issues.Add(new TrainingValidationIssue(
-                    feature,
-                    "ERROR_ZERO_VARIANCE",
-                    "Feature variance is effectively zero relative to its own scale; covariance model may be singular.",
-                    std));
+                issues.Add(new TrainingValidationIssue(feature, "ERROR_ZERO_VARIANCE",
+                    "Feature variance is effectively zero relative to its own scale; covariance model may be singular.", std));
             }
             else if (relativeStd <= 1e-6)
             {
-                issues.Add(new TrainingValidationIssue(
-                    feature,
-                    "WARN_LOW_VARIANCE",
-                    "Feature variance is very small relative to its own scale.",
-                    std));
+                issues.Add(new TrainingValidationIssue(feature, "WARN_LOW_VARIANCE",
+                    "Feature variance is very small relative to its own scale.", std));
             }
         }
 
         var duplicateCount = CountDuplicateRows(samples);
         if (duplicateCount > 0)
         {
-            issues.Add(new TrainingValidationIssue(
-                "", "WARN_DUPLICATE_SAMPLES",
+            issues.Add(new TrainingValidationIssue("", "WARN_DUPLICATE_SAMPLES",
                 $"Detected {duplicateCount} duplicate statistical feature row(s). Duplicates reduce effective training diversity.", duplicateCount));
         }
 
@@ -89,6 +81,26 @@ public sealed class TrainingValidationService
             FeatureCount = required,
             Issues = issues
         };
+    }
+
+    private static void PopulateZScore(IReadOnlyList<FeatureVector> samples, ICollection<TrainingValidationIssue> issues)
+    {
+        if (samples.Count == 0) return;
+        var peaks = samples.Select(v => v["Peak"]).ToArray();
+        if (peaks.Any(x => !double.IsFinite(x)))
+        {
+            issues.Add(new TrainingValidationIssue("Peak", "ERROR_NONFINITE", "Training Peak values contain NaN or Infinity."));
+            return;
+        }
+
+        var mean = peaks.Average();
+        var variance = peaks.Length > 1
+            ? peaks.Sum(x => (x - mean) * (x - mean)) / (peaks.Length - 1)
+            : 0.0;
+        var std = Math.Sqrt(Math.Max(variance, 0));
+        var denominator = std > 0 ? std : 1e-12;
+        foreach (var sample in samples)
+            sample["ZScore"] = (sample["Peak"] - mean) / denominator;
     }
 
     private static int CountDuplicateRows(IReadOnlyList<FeatureVector> samples)
