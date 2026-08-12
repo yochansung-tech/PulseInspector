@@ -6,7 +6,9 @@ namespace PulseInspector.Services;
 
 /// <summary>
 /// Exports inspection results in a stable, machine-readable CSV format.
-/// Feature columns always follow FeatureVector.StatisticalFeatureNames order.
+/// Statistical feature columns follow FeatureVector.StatisticalFeatureNames order;
+/// ZScore is appended as a diagnostic-only feature and is never part of the
+/// Mahalanobis statistical vector.
 /// </summary>
 public sealed class InspectionCsvExporter
 {
@@ -108,6 +110,11 @@ public sealed class InspectionCsvExporter
     {
         foreach (var name in FeatureVector.StatisticalFeatureNames)
             yield return Format(features[name]);
+
+        // ZScore is diagnostic-only and intentionally follows all statistical
+        // features. It is exported for traceability but is not used by the
+        // Mahalanobis covariance model.
+        yield return Format(features["ZScore"]);
     }
 
     private static string Format(double value) => value.ToString("R", CultureInfo.InvariantCulture);
