@@ -4,7 +4,8 @@ using PulseInspector.Models;
 namespace PulseInspector.Services;
 
 /// <summary>
-/// Loads a CSV in which each non-empty data line represents one complete waveform/subgroup.
+/// Loads a CSV in which each non-empty numeric data line represents one complete waveform/subgroup.
+/// Comment lines and non-numeric header lines are ignored; partially numeric rows are rejected.
 /// </summary>
 public sealed class CsvRowWaveformLoader
 {
@@ -23,18 +24,32 @@ public sealed class CsvRowWaveformLoader
         {
             lineNumber++;
             var line = rawLine.Trim();
-            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
+                continue;
 
             var cells = line.Split(new[] { ',', ';', '\t' }, StringSplitOptions.TrimEntries);
-            if (cells.Length < 2) continue;
+            if (cells.Length < 2)
+                continue;
 
             var samples = new double[cells.Length];
+            var numericCount = 0;
             for (var i = 0; i < cells.Length; i++)
             {
-                if (!double.TryParse(cells[i], NumberStyles.Float | NumberStyles.AllowLeadingSign,
-                    CultureInfo.InvariantCulture, out samples[i]) || !double.IsFinite(samples[i]))
-                    throw new InvalidDataException($"Invalid numeric value at line {lineNumber}, column {i + 1}: '{cells[i]}'.");
+                if (double.TryParse(cells[i], NumberStyles.Float | NumberStyles.AllowLeadingSign,
+                    CultureInfo.InvariantCulture, out var value) && double.IsFinite(value))
+                {
+                    samples[i] = value;
+                    numericCount++;
+                }
             }
+
+            // A completely non-numeric line is treated as a header and ignored.
+            if (numericCount == 0)
+                continue;
+
+            // A partially numeric line is almost certainly malformed data.
+            if (numericCount != cells.Length)
+                throw new InvalidDataException($"Non-numeric cell found at line {lineNumber}: '{rawLine}'.");
 
             expectedSampleCount ??= samples.Length;
             if (samples.Length != expectedSampleCount.Value)
