@@ -28,11 +28,6 @@ public sealed class TrainingValidationService
                 $"At least {required + 1} training samples are recommended for a {required}-dimensional covariance model. Current count: {samples.Length}.", samples.Length));
         }
 
-        // ZScore is derived from the complete training Peak distribution. MainForm
-        // performs validation before InspectionService.Train(), so validation must
-        // populate this derived feature itself rather than inspecting its default 0.
-        PopulateZScore(samples, issues);
-
         foreach (var feature in FeatureVector.StatisticalFeatureNames)
         {
             var values = samples.Select(v => v[feature]).ToArray();
@@ -49,8 +44,7 @@ public sealed class TrainingValidationService
                 : 0.0;
             var std = Math.Sqrt(Math.Max(variance, 0));
 
-            // Each feature has its own physical scale. Charge and time-based
-            // features can legitimately be much smaller than 1.0.
+            // Validate relative variation using the feature's own physical scale.
             var maxAbs = values.Max(x => Math.Abs(x));
             var scale = Math.Max(Math.Abs(mean), maxAbs);
             scale = Math.Max(scale, 1e-30);
@@ -81,26 +75,6 @@ public sealed class TrainingValidationService
             FeatureCount = required,
             Issues = issues
         };
-    }
-
-    private static void PopulateZScore(IReadOnlyList<FeatureVector> samples, ICollection<TrainingValidationIssue> issues)
-    {
-        if (samples.Count == 0) return;
-        var peaks = samples.Select(v => v["Peak"]).ToArray();
-        if (peaks.Any(x => !double.IsFinite(x)))
-        {
-            issues.Add(new TrainingValidationIssue("Peak", "ERROR_NONFINITE", "Training Peak values contain NaN or Infinity."));
-            return;
-        }
-
-        var mean = peaks.Average();
-        var variance = peaks.Length > 1
-            ? peaks.Sum(x => (x - mean) * (x - mean)) / (peaks.Length - 1)
-            : 0.0;
-        var std = Math.Sqrt(Math.Max(variance, 0));
-        var denominator = std > 0 ? std : 1e-12;
-        foreach (var sample in samples)
-            sample["ZScore"] = (sample["Peak"] - mean) / denominator;
     }
 
     private static int CountDuplicateRows(IReadOnlyList<FeatureVector> samples)
