@@ -8,10 +8,11 @@ public sealed class FeatureVector
         "Charge", "FWHM", "MahalanobisDistance", "Noise", "Peak", "RiseTime", "Threshold", "ZScore"
     };
 
-    // Single source of truth for the six-dimensional statistical model.
+    // ZScore is retained as a display/diagnostic feature, but is NOT included
+    // in the Mahalanobis model because it is derived directly from Peak.
     private static readonly string[] StatisticalNames =
     {
-        "Charge", "FWHM", "Noise", "Peak", "RiseTime", "ZScore"
+        "Charge", "FWHM", "Noise", "Peak", "RiseTime"
     };
 
     private readonly Dictionary<string, double> _values = new(StringComparer.Ordinal);
@@ -28,13 +29,10 @@ public sealed class FeatureVector
 
     public IReadOnlyDictionary<string, double> Values => _values;
 
-    /// <summary>Returns all features in the fixed FeatureNames order.</summary>
     public double[] ToArray() => OrderedNames.Select(n => this[n]).ToArray();
 
-    /// <summary>Returns only statistical features in the fixed model order.</summary>
     public double[] ToStatisticalArray() => StatisticalNames.Select(n => this[n]).ToArray();
 
-    /// <summary>Creates a vector from the six statistical values in canonical order.</summary>
     public static FeatureVector FromStatisticalArray(IReadOnlyList<double> values)
     {
         ArgumentNullException.ThrowIfNull(values);
