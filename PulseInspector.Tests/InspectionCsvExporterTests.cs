@@ -65,6 +65,11 @@ internal static class InspectionCsvExporterTests
         var vector = new FeatureVector();
         foreach (var name in FeatureVector.StatisticalFeatureNames)
             vector[name] = value;
+
+        // ZScore is diagnostic-only, but it is intentionally exported after
+        // the five statistical features. Give the test fixture a deterministic
+        // value so the complete exported feature sequence is validated.
+        vector["ZScore"] = value;
         return vector;
     }
 
