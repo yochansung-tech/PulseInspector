@@ -9,6 +9,7 @@ internal static class WinFormsSmokeTest
 {
     public static void Run()
     {
+        Console.WriteLine("=== WinForms Smoke Test ===");
         Exception? failure = null;
         var thread = new Thread(() =>
         {
@@ -16,7 +17,10 @@ internal static class WinFormsSmokeTest
             {
                 using var form = new MainForm();
                 Assert(form.Text == "PulseInspector Release 1.0", "MainForm title is incorrect.");
+                Console.WriteLine("MainForm           : PASS");
+
                 Assert(form.MainMenuStrip is not null, "MainMenuStrip was not created.");
+                Console.WriteLine("MenuStrip          : PASS");
 
                 var load = typeof(MainForm).GetMethod("OnLoad", BindingFlags.Instance | BindingFlags.NonPublic);
                 Assert(load is not null, "MainForm.OnLoad could not be located.");
@@ -32,9 +36,11 @@ internal static class WinFormsSmokeTest
                 Assert(export is not null, "Export menu is missing.");
                 Assert(FindMenu(export!.DropDownItems, "Export Inspection Result to CSV...") is not null,
                     "CSV export command is missing.");
+                Console.WriteLine("Export Menu        : PASS");
 
                 Assert(form.Controls.OfType<MenuStrip>().Any(), "MenuStrip is not attached to MainForm.");
                 Assert(form.Controls.OfType<Panel>().Any(), "Main analysis/status panels were not created.");
+                Console.WriteLine("Controls           : PASS");
             }
             catch (Exception ex)
             {
@@ -48,6 +54,9 @@ internal static class WinFormsSmokeTest
 
         if (failure is not null)
             throw new InvalidOperationException("WinForms UI smoke test failed.", failure);
+
+        Console.WriteLine("Dispose            : PASS");
+        Console.WriteLine("WINFORMS SMOKE TEST PASSED");
     }
 
     private static ToolStripMenuItem? FindMenu(ToolStripItemCollection items, string text)
