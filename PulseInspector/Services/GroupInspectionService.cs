@@ -29,7 +29,7 @@ public sealed class GroupInspectionService
         var minimumGroups = FeatureVector.StatisticalFeatureNames.Count + 1;
         if (groupFeatures.Length < minimumGroups)
             throw new InvalidOperationException(
-                $"At least {minimumGroups} normal groups are required for the six-feature covariance model.");
+                $"At least {minimumGroups} normal groups are required for the {FeatureVector.StatisticalFeatureNames.Count}-feature covariance model.");
 
         return _inspectionService.Train(groupFeatures, confidence);
     }
