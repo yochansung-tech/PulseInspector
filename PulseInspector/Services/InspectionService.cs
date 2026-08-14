@@ -6,7 +6,7 @@ public sealed class InspectionService
 {
     private readonly TrainingValidationService _trainingValidation = new();
     private const double CovarianceRegularization = 1e-6;
-    private const int DefaultNormalModeCount = 2;
+    private const int DefaultNormalModeCount = 1;
     private const int MaxKMeansIterations = 50;
 
     public InspectionService() { }
@@ -21,8 +21,8 @@ public sealed class InspectionService
     {
         if (confidence <= 0 || confidence >= 1)
             throw new ArgumentOutOfRangeException(nameof(confidence), "Confidence must be between 0 and 1.");
-        if (normalModeCount != 2)
-            throw new ArgumentOutOfRangeException(nameof(normalModeCount), "The current normal-mode trainer supports exactly two normal modes.");
+        if (normalModeCount is < 1 or > 2)
+            throw new ArgumentOutOfRangeException(nameof(normalModeCount), "Normal mode count must be 1 or 2.");
 
         var samples = vectors.Select(v => v.Clone()).ToArray();
         if (samples.Length == 0)
@@ -49,8 +49,17 @@ public sealed class InspectionService
             .Select(row => Standardize(row, featureMeans, featureScales))
             .ToArray();
 
-        var assignments = ClusterTwoNormalModes(standardizedRows);
-        var modeModels = BuildModeModels(standardizedRows, assignments, confidence);
+        int[] assignments;
+        if (normalModeCount == 1)
+        {
+            assignments = new int[standardizedRows.Length];
+        }
+        else
+        {
+            assignments = ClusterTwoNormalModes(standardizedRows);
+        }
+
+        var modeModels = BuildModeModels(standardizedRows, assignments, confidence, normalModeCount);
         var firstMode = modeModels[0];
         var peakIndex = FeatureVector.GetStatisticalIndex("Peak");
 
@@ -111,16 +120,23 @@ public sealed class InspectionService
         return new InspectionResult(legacyDefect, distance, model.Threshold, vector, legacyDefect ? "Abnormal group" : "Normal group");
     }
 
-    private NormalModeModel[] BuildModeModels(double[][] standardizedRows, int[] assignments, double confidence)
+    private NormalModeModel[] BuildModeModels(
+        double[][] standardizedRows,
+        int[] assignments,
+        double confidence,
+        int modeCount)
     {
         var featureCount = FeatureVector.StatisticalFeatureCount;
         var threshold = StatisticsService.ChiSquareQuantile(featureCount, confidence);
-        var result = new NormalModeModel[2];
-        for (var modeIndex = 0; modeIndex < 2; modeIndex++)
+        var result = new NormalModeModel[modeCount];
+
+        for (var modeIndex = 0; modeIndex < modeCount; modeIndex++)
         {
             var rows = standardizedRows.Where((_, index) => assignments[index] == modeIndex).ToArray();
             if (rows.Length < featureCount + 1)
-                throw new InvalidOperationException($"Normal mode {modeIndex + 1} contains only {rows.Length} samples; at least {featureCount + 1} are required.");
+                throw new InvalidOperationException(
+                    $"Normal mode {modeIndex + 1} contains only {rows.Length} samples; at least {featureCount + 1} are required.");
+
             var mean = StatisticsService.Mean(rows);
             var covariance = StatisticsService.Covariance(rows);
             for (var i = 0; i < featureCount; i++) covariance[i, i] += CovarianceRegularization;
@@ -129,6 +145,7 @@ public sealed class InspectionService
                 .Select(i => Math.Sqrt(Math.Max(covariance[i, i], 0.0)))
                 .Select(x => x > 0 ? x : 1e-12)
                 .ToArray();
+
             result[modeIndex] = new NormalModeModel
             {
                 ModeIndex = modeIndex,
@@ -143,19 +160,24 @@ public sealed class InspectionService
             };
         }
 
-        var fwhmIndex = FeatureVector.GetStatisticalIndex("FWHM");
-        if (result[0].Mean[fwhmIndex] > result[1].Mean[fwhmIndex])
+        if (modeCount == 2)
         {
-            (result[0], result[1]) = (result[1], result[0]);
-            result[0].ModeIndex = 0;
-            result[1].ModeIndex = 1;
+            var fwhmIndex = FeatureVector.GetStatisticalIndex("FWHM");
+            if (result[0].Mean[fwhmIndex] > result[1].Mean[fwhmIndex])
+            {
+                (result[0], result[1]) = (result[1], result[0]);
+                result[0].ModeIndex = 0;
+                result[1].ModeIndex = 1;
+            }
         }
+
         return result;
     }
 
     private static int[] ClusterTwoNormalModes(double[][] rows)
     {
-        if (rows.Length < 2) throw new InvalidOperationException("At least two samples are required for normal-mode clustering.");
+        if (rows.Length < 2)
+            throw new InvalidOperationException("At least two samples are required for normal-mode clustering.");
         var fwhmIndex = FeatureVector.GetStatisticalIndex("FWHM");
         var lowIndex = 0;
         var highIndex = 0;
@@ -176,7 +198,11 @@ public sealed class InspectionService
                 var next = d0 <= d1 ? 0 : 1;
                 if (iteration == 0 || assignments[i] != next) { assignments[i] = next; changed = true; }
             }
-            var sums = new[] { new double[FeatureVector.StatisticalFeatureCount], new double[FeatureVector.StatisticalFeatureCount] };
+            var sums = new[]
+            {
+                new double[FeatureVector.StatisticalFeatureCount],
+                new double[FeatureVector.StatisticalFeatureCount]
+            };
             var counts = new int[2];
             for (var i = 0; i < rows.Length; i++)
             {
@@ -186,7 +212,8 @@ public sealed class InspectionService
             }
             for (var cluster = 0; cluster < 2; cluster++)
             {
-                if (counts[cluster] == 0) throw new InvalidOperationException("Normal-mode clustering produced an empty cluster.");
+                if (counts[cluster] == 0)
+                    throw new InvalidOperationException("Normal-mode clustering produced an empty cluster.");
                 for (var j = 0; j < centroids[cluster].Length; j++) centroids[cluster][j] = sums[cluster][j] / counts[cluster];
             }
             if (!changed) break;
@@ -197,15 +224,24 @@ public sealed class InspectionService
     private static double SquaredDistance(IReadOnlyList<double> a, IReadOnlyList<double> b)
     {
         double sum = 0;
-        for (var i = 0; i < a.Count; i++) { var d = a[i] - b[i]; sum += d * d; }
+        for (var i = 0; i < a.Count; i++)
+        {
+            var d = a[i] - b[i];
+            sum += d * d;
+        }
         return sum;
     }
 
     private static double[] Standardize(IReadOnlyList<double> values, IReadOnlyList<double> means, IReadOnlyList<double> scales)
     {
-        if (values.Count != means.Count || values.Count != scales.Count) throw new ArgumentException("Feature standardization dimensions do not match.");
+        if (values.Count != means.Count || values.Count != scales.Count)
+            throw new ArgumentException("Feature standardization dimensions do not match.");
         var result = new double[values.Count];
-        for (var i = 0; i < values.Count; i++) { var scale = scales[i] > 0 ? scales[i] : 1e-12; result[i] = (values[i] - means[i]) / scale; }
+        for (var i = 0; i < values.Count; i++)
+        {
+            var scale = scales[i] > 0 ? scales[i] : 1e-12;
+            result[i] = (values[i] - means[i]) / scale;
+        }
         return result;
     }
 
