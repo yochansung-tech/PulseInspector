@@ -44,6 +44,7 @@ internal static class FeatureDeviationTests
         FeatureDeviationGridTests.Run();
         InspectionSelectionServiceTests.Run();
         InspectionCsvExporterTests.Run();
+        MultiModalMahalanobisTests.Run();
         WinFormsSmokeTest.Run();
     }
 
