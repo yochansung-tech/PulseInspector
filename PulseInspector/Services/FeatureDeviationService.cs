@@ -21,15 +21,32 @@ public sealed class FeatureDeviationService
             standardized[i] = (raw[i] - model.FeatureMeans[i]) / scale;
         }
 
-        // Model.Mean is in standardized space.
+        // Explain deviations against the closest normal mode when the model is
+        // multimodal. Legacy single-mode models continue to use the top-level
+        // Mean/InverseCovariance fields.
+        var mode = model.NormalModes.Count > 1
+            ? model.NormalModes
+                .Select(candidate => new
+                {
+                    Candidate = candidate,
+                    Distance = StatisticsService.Mahalanobis(
+                        standardized, candidate.Mean, candidate.InverseCovariance)
+                })
+                .OrderBy(x => x.Distance)
+                .First().Candidate
+            : null;
+
+        var mean = mode?.Mean ?? model.Mean;
+        var inverseCovariance = mode?.InverseCovariance ?? model.InverseCovariance;
+
         var centered = new double[raw.Length];
         for (var i = 0; i < raw.Length; i++)
-            centered[i] = standardized[i] - model.Mean[i];
+            centered[i] = standardized[i] - mean[i];
 
         var weighted = new double[raw.Length];
         for (var i = 0; i < raw.Length; i++)
             for (var j = 0; j < raw.Length; j++)
-                weighted[i] += model.InverseCovariance[i, j] * centered[j];
+                weighted[i] += inverseCovariance[i, j] * centered[j];
 
         var result = new List<FeatureDeviation>(names.Count);
         for (var i = 0; i < names.Count; i++)

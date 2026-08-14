@@ -18,20 +18,30 @@ public sealed class GroupInspectionService
         _decisionService = decisionService ?? new GroupDecisionService();
     }
 
+    /// <summary>
+    /// Trains from every valid normal subgroup in every supplied training group.
+    /// The previous implementation reduced each CSV group to one mean vector,
+    /// which discarded the real multimodal waveform distribution. The new
+    /// implementation preserves every subgroup and lets InspectionService learn
+    /// the two known-normal waveform modes from the complete population.
+    /// </summary>
     public InspectionModel Train(IEnumerable<GroupData> normalGroups, double confidence = 0.999)
     {
         ArgumentNullException.ThrowIfNull(normalGroups);
 
-        var groupFeatures = normalGroups
-            .Select(GetGroupFeatures)
+        var trainingFeatures = normalGroups
+            .SelectMany(group => group.Records)
+            .Select(record => record.Features)
+            .Where(features => features is not null)
+            .Select(features => features!.Clone())
             .ToArray();
 
-        var minimumGroups = FeatureVector.StatisticalFeatureNames.Count + 1;
-        if (groupFeatures.Length < minimumGroups)
+        var minimumSamples = FeatureVector.StatisticalFeatureCount + 1;
+        if (trainingFeatures.Length < minimumSamples)
             throw new InvalidOperationException(
-                $"At least {minimumGroups} normal groups are required for the {FeatureVector.StatisticalFeatureNames.Count}-feature covariance model.");
+                $"At least {minimumSamples} normal subgroup samples are required for the {FeatureVector.StatisticalFeatureNames.Count}-feature covariance model.");
 
-        return _inspectionService.Train(groupFeatures, confidence);
+        return _inspectionService.Train(trainingFeatures, confidence, normalModeCount: 2);
     }
 
     public GroupInspectionResult Inspect(
