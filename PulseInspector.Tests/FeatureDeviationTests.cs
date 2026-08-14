@@ -15,6 +15,7 @@ internal static class FeatureDeviationTests
             group.AddWaveform(new[] { 0d, 1d }, CreateFeatures(i + 0.2), $"train-{i}-2", 1e-6);
             trainingGroups.Add(group);
         }
+
         var inspection = new GroupInspectionService();
         var model = inspection.Train(trainingGroups, 0.999);
         var defective = CreateFeatures(10.1);
@@ -33,10 +34,13 @@ internal static class FeatureDeviationTests
         Assert(deviations.All(d => d.AbsoluteZScore >= 0), "Absolute Z-score cannot be negative.");
         Assert(deviations.Zip(deviations.Skip(1), (a, b) => a.AbsoluteZScore >= b.AbsoluteZScore).All(x => x), "Feature deviations are not sorted by absolute Z-score.");
 
+        // FeatureDeviationService explains the closest normal mode. The
+        // regression expectation must therefore use the same selected mode,
+        // rather than the legacy top-level mode-0 compatibility fields.
+        var (distanceSquared, selectedThreshold) = ComputeClosestModeMahalanobisSquared(defective, model);
         var contributionSum = deviations.Sum(d => d.MahalanobisContribution);
-        var distanceSquared = ComputeMahalanobisSquared(defective, model);
         AssertNear(contributionSum, distanceSquared, Math.Max(1e-9, Math.Abs(distanceSquared) * 1e-8), "Mahalanobis contribution sum");
-        Assert(distanceSquared > model.Threshold, "Defective vector should exceed the configured Mahalanobis threshold.");
+        Assert(distanceSquared > selectedThreshold, "Defective vector should exceed the selected normal-mode Mahalanobis threshold.");
         Assert(deviations[0].AbsoluteZScore > 0, "Top feature deviation should have a non-zero Z-score.");
         Assert(deviations.Any(d => d.FeatureName == "Peak" && d.AbsoluteZScore > 1), "Peak deviation was not reflected in the feature explanation.");
         Assert(deviations.Any(d => d.FeatureName == "Charge" && d.AbsoluteZScore > 1), "Charge deviation was not reflected in the feature explanation.");
@@ -48,7 +52,9 @@ internal static class FeatureDeviationTests
         WinFormsSmokeTest.Run();
     }
 
-    private static double ComputeMahalanobisSquared(FeatureVector vector, InspectionModel model)
+    private static (double DistanceSquared, double Threshold) ComputeClosestModeMahalanobisSquared(
+        FeatureVector vector,
+        InspectionModel model)
     {
         var raw = vector.ToStatisticalArray();
         var standardized = new double[raw.Length];
@@ -58,14 +64,38 @@ internal static class FeatureDeviationTests
             standardized[i] = (raw[i] - model.FeatureMeans[i]) / scale;
         }
 
-        var centered = new double[standardized.Length];
-        for (var i = 0; i < standardized.Length; i++)
-            centered[i] = standardized[i] - model.Mean[i];
+        if (model.NormalModes.Count == 0)
+            return (ComputeDistanceSquared(standardized, model.Mean, model.InverseCovariance), model.Threshold);
+
+        var bestDistance = double.PositiveInfinity;
+        var bestThreshold = model.Threshold;
+
+        foreach (var mode in model.NormalModes)
+        {
+            var distance = ComputeDistanceSquared(standardized, mode.Mean, mode.InverseCovariance);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestThreshold = mode.Threshold;
+            }
+        }
+
+        return (bestDistance, bestThreshold);
+    }
+
+    private static double ComputeDistanceSquared(
+        IReadOnlyList<double> standardized,
+        IReadOnlyList<double> mean,
+        double[,] inverseCovariance)
+    {
+        var centered = new double[standardized.Count];
+        for (var i = 0; i < standardized.Count; i++)
+            centered[i] = standardized[i] - mean[i];
 
         var weighted = new double[centered.Length];
         for (var i = 0; i < centered.Length; i++)
             for (var j = 0; j < centered.Length; j++)
-                weighted[i] += model.InverseCovariance[i, j] * centered[j];
+                weighted[i] += inverseCovariance[i, j] * centered[j];
 
         var sum = 0d;
         for (var i = 0; i < centered.Length; i++)
