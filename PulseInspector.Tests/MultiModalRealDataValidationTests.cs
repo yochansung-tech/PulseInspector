@@ -5,9 +5,7 @@ namespace PulseInspector.Tests;
 
 /// <summary>
 /// Regression/scaffold for the production T1-T8 validation set.
-/// The application test runner invokes this only when the real CSV fixtures
-/// are present under TestData/RealValidation; CI remains deterministic without
-/// requiring production measurement files in the repository.
+/// The test runs only when real CSV fixtures are present under TestData/RealValidation.
 /// </summary>
 internal static class MultiModalRealDataValidationTests
 {
@@ -26,10 +24,31 @@ internal static class MultiModalRealDataValidationTests
         if (trainingFiles.Length == 0)
             return;
 
-        var loader = new CsvDataLoader();
+        var loader = new CsvRowWaveformLoader();
+        var extractor = new FeatureExtractor();
         var groups = new List<GroupData>();
+
         foreach (var file in trainingFiles)
-            groups.AddRange(loader.LoadGroups(file));
+        {
+            var rows = loader.LoadRows(file, new CsvImportOptions
+            {
+                MeasurementPeriodSeconds = 2.56e-6
+            });
+
+            var group = new GroupData { Id = Path.GetFileNameWithoutExtension(file) };
+            foreach (var waveform in rows)
+            {
+                var features = extractor.Extract(waveform.Samples, waveform.SampleIntervalSeconds);
+                group.AddWaveform(
+                    waveform.Samples,
+                    features,
+                    waveform.SourceName,
+                    waveform.SampleIntervalSeconds,
+                    waveform.HasExplicitTimeAxis);
+            }
+
+            groups.Add(group);
+        }
 
         var model = new GroupInspectionService().Train(groups, 0.999);
         if (!model.IsMultiModal)
@@ -39,9 +58,6 @@ internal static class MultiModalRealDataValidationTests
         if (total <= 0)
             throw new InvalidOperationException("Real validation model contains no training samples.");
 
-        // The production dataset is expected to contain two known-normal
-        // populations. Do not assert exact percentages here because the fixture
-        // may be expanded over time; report the learned proportions instead.
         var proportions = model.NormalModes
             .Select(mode => (double)mode.SampleCount / total)
             .ToArray();
