@@ -5,27 +5,15 @@ namespace PulseInspector.Services;
 public sealed class InspectionService
 {
     private readonly TrainingValidationService _trainingValidation = new();
-
-    // Small diagonal shrinkage stabilizes covariance inversion without
-    // changing the physical meaning of the five independent features.
     private const double CovarianceRegularization = 1e-6;
     private const int DefaultNormalModeCount = 2;
     private const int MaxKMeansIterations = 50;
 
-    public InspectionService()
-    {
-    }
+    public InspectionService() { }
 
     public TrainingValidationResult ValidateTraining(IEnumerable<FeatureVector> vectors) =>
         _trainingValidation.Validate(vectors);
 
-    /// <summary>
-    /// Trains a two-mode normal model from all supplied normal subgroup feature
-    /// vectors. The two modes are known-normal waveform populations, not defect
-    /// classes. A deterministic 1-D FWHM initialization is used only to make
-    /// the K=2 clustering reproducible; all five statistical features participate
-    /// in the subsequent standardized K-means assignments and covariance models.
-    /// </summary>
     public InspectionModel Train(
         IEnumerable<FeatureVector> vectors,
         double confidence = 0.999,
@@ -50,27 +38,19 @@ public sealed class InspectionService
 
         var rawRows = samples.Select(v => v.ToStatisticalArray()).ToArray();
         var featureCount = FeatureVector.StatisticalFeatureCount;
-
-        // One shared standardization is important: all modes are compared in
-        // exactly the same physical feature coordinate system.
         var featureMeans = Enumerable.Range(0, featureCount)
             .Select(i => rawRows.Average(row => row[i]))
             .ToArray();
-
         var featureScales = Enumerable.Range(0, featureCount)
             .Select(i => SampleStandardDeviation(rawRows.Select(row => row[i]).ToArray(), featureMeans[i]))
             .Select(scale => scale > 0 && double.IsFinite(scale) ? scale : 1e-12)
             .ToArray();
-
         var standardizedRows = rawRows
             .Select(row => Standardize(row, featureMeans, featureScales))
             .ToArray();
 
         var assignments = ClusterTwoNormalModes(standardizedRows);
         var modeModels = BuildModeModels(standardizedRows, assignments, confidence);
-
-        // Backward-compatible top-level fields mirror mode 0. New inspection
-        // paths use NormalModes and evaluate the minimum D² across all modes.
         var firstMode = modeModels[0];
         var peakIndex = FeatureVector.GetStatisticalIndex("Peak");
 
@@ -86,7 +66,7 @@ public sealed class InspectionService
             PeakStandardDeviation = featureScales[peakIndex],
             Confidence = confidence,
             Threshold = firstMode.Threshold,
-            NormalModes = modeModels
+            NormalModes = modeModels.ToList()
         };
 
         model.ValidateFeatureOrder();
@@ -96,14 +76,11 @@ public sealed class InspectionService
     public InspectionResult Inspect(FeatureVector vector, InspectionModel model)
     {
         model.ValidateFeatureOrder();
-
         var peakStd = model.PeakStandardDeviation > 0 ? model.PeakStandardDeviation : 1e-12;
         vector["ZScore"] = (vector["Peak"] - model.PeakMean) / peakStd;
-
         var rawValues = vector.ToStatisticalArray();
         if (rawValues.Length != model.FeatureMeans.Length)
             throw new InvalidOperationException("FeatureVector and InspectionModel dimensions do not match.");
-
         var standardizedValues = Standardize(rawValues, model.FeatureMeans, model.FeatureScales);
 
         if (model.IsMultiModal)
@@ -112,71 +89,46 @@ public sealed class InspectionService
                 .Select(mode => new
                 {
                     Mode = mode,
-                    Distance = StatisticsService.Mahalanobis(
-                        standardizedValues, mode.Mean, mode.InverseCovariance)
+                    Distance = StatisticsService.Mahalanobis(standardizedValues, mode.Mean, mode.InverseCovariance)
                 })
                 .OrderBy(x => x.Distance)
                 .First();
-
             var defect = best.Distance > best.Mode.Threshold;
             vector["MahalanobisDistance"] = best.Distance;
             vector["Threshold"] = best.Mode.Threshold;
-
             return new InspectionResult(
                 defect,
                 best.Distance,
                 best.Mode.Threshold,
                 vector,
-                defect
-                    ? $"Abnormal subgroup (closest normal mode: {best.Mode.Name})"
-                    : $"Normal subgroup ({best.Mode.Name})");
+                defect ? $"Abnormal subgroup (closest normal mode: {best.Mode.Name})" : $"Normal subgroup ({best.Mode.Name})");
         }
 
-        // Legacy single-mode model support.
-        var distance = StatisticsService.Mahalanobis(
-            standardizedValues, model.Mean, model.InverseCovariance);
+        var distance = StatisticsService.Mahalanobis(standardizedValues, model.Mean, model.InverseCovariance);
         var legacyDefect = distance > model.Threshold;
         vector["MahalanobisDistance"] = distance;
         vector["Threshold"] = model.Threshold;
-
-        return new InspectionResult(
-            legacyDefect,
-            distance,
-            model.Threshold,
-            vector,
-            legacyDefect ? "Abnormal group" : "Normal group");
+        return new InspectionResult(legacyDefect, distance, model.Threshold, vector, legacyDefect ? "Abnormal group" : "Normal group");
     }
 
-    private NormalModeModel[] BuildModeModels(
-        double[][] standardizedRows,
-        int[] assignments,
-        double confidence)
+    private NormalModeModel[] BuildModeModels(double[][] standardizedRows, int[] assignments, double confidence)
     {
         var featureCount = FeatureVector.StatisticalFeatureCount;
         var threshold = StatisticsService.ChiSquareQuantile(featureCount, confidence);
         var result = new NormalModeModel[2];
-
         for (var modeIndex = 0; modeIndex < 2; modeIndex++)
         {
-            var rows = standardizedRows
-                .Where((_, index) => assignments[index] == modeIndex)
-                .ToArray();
-
+            var rows = standardizedRows.Where((_, index) => assignments[index] == modeIndex).ToArray();
             if (rows.Length < featureCount + 1)
-                throw new InvalidOperationException(
-                    $"Normal mode {modeIndex + 1} contains only {rows.Length} samples; at least {featureCount + 1} are required.");
-
+                throw new InvalidOperationException($"Normal mode {modeIndex + 1} contains only {rows.Length} samples; at least {featureCount + 1} are required.");
             var mean = StatisticsService.Mean(rows);
             var covariance = StatisticsService.Covariance(rows);
-            for (var i = 0; i < featureCount; i++)
-                covariance[i, i] += CovarianceRegularization;
-
+            for (var i = 0; i < featureCount; i++) covariance[i, i] += CovarianceRegularization;
             var inverse = StatisticsService.Invert(covariance);
             var standardDeviations = Enumerable.Range(0, featureCount)
                 .Select(i => Math.Sqrt(Math.Max(covariance[i, i], 0.0)))
                 .Select(x => x > 0 ? x : 1e-12)
                 .ToArray();
-
             result[modeIndex] = new NormalModeModel
             {
                 ModeIndex = modeIndex,
@@ -191,9 +143,6 @@ public sealed class InspectionService
             };
         }
 
-        // Keep mode numbering stable: Mode 1 is the lower-FWHM population and
-        // Mode 2 is the higher-FWHM population. This makes saved diagnostics
-        // and UI output reproducible across training runs.
         var fwhmIndex = FeatureVector.GetStatisticalIndex("FWHM");
         if (result[0].Mean[fwhmIndex] > result[1].Mean[fwhmIndex])
         {
@@ -201,32 +150,22 @@ public sealed class InspectionService
             result[0].ModeIndex = 0;
             result[1].ModeIndex = 1;
         }
-
         return result;
     }
 
     private static int[] ClusterTwoNormalModes(double[][] rows)
     {
-        if (rows.Length < 2)
-            throw new InvalidOperationException("At least two samples are required for normal-mode clustering.");
-
+        if (rows.Length < 2) throw new InvalidOperationException("At least two samples are required for normal-mode clustering.");
         var fwhmIndex = FeatureVector.GetStatisticalIndex("FWHM");
         var lowIndex = 0;
         var highIndex = 0;
-
         for (var i = 1; i < rows.Length; i++)
         {
             if (rows[i][fwhmIndex] < rows[lowIndex][fwhmIndex]) lowIndex = i;
             if (rows[i][fwhmIndex] > rows[highIndex][fwhmIndex]) highIndex = i;
         }
-
-        var centroids = new[]
-        {
-            (double[])rows[lowIndex].Clone(),
-            (double[])rows[highIndex].Clone()
-        };
+        var centroids = new[] { (double[])rows[lowIndex].Clone(), (double[])rows[highIndex].Clone() };
         var assignments = new int[rows.Length];
-
         for (var iteration = 0; iteration < MaxKMeansIterations; iteration++)
         {
             var changed = false;
@@ -235,67 +174,38 @@ public sealed class InspectionService
                 var d0 = SquaredDistance(rows[i], centroids[0]);
                 var d1 = SquaredDistance(rows[i], centroids[1]);
                 var next = d0 <= d1 ? 0 : 1;
-                if (iteration == 0 || assignments[i] != next)
-                {
-                    assignments[i] = next;
-                    changed = true;
-                }
+                if (iteration == 0 || assignments[i] != next) { assignments[i] = next; changed = true; }
             }
-
-            var sums = new[]
-            {
-                new double[FeatureVector.StatisticalFeatureCount],
-                new double[FeatureVector.StatisticalFeatureCount]
-            };
+            var sums = new[] { new double[FeatureVector.StatisticalFeatureCount], new double[FeatureVector.StatisticalFeatureCount] };
             var counts = new int[2];
-
             for (var i = 0; i < rows.Length; i++)
             {
                 var cluster = assignments[i];
                 counts[cluster]++;
-                for (var j = 0; j < sums[cluster].Length; j++)
-                    sums[cluster][j] += rows[i][j];
+                for (var j = 0; j < sums[cluster].Length; j++) sums[cluster][j] += rows[i][j];
             }
-
             for (var cluster = 0; cluster < 2; cluster++)
             {
-                if (counts[cluster] == 0)
-                    throw new InvalidOperationException("Normal-mode clustering produced an empty cluster.");
-                for (var j = 0; j < centroids[cluster].Length; j++)
-                    centroids[cluster][j] = sums[cluster][j] / counts[cluster];
+                if (counts[cluster] == 0) throw new InvalidOperationException("Normal-mode clustering produced an empty cluster.");
+                for (var j = 0; j < centroids[cluster].Length; j++) centroids[cluster][j] = sums[cluster][j] / counts[cluster];
             }
-
             if (!changed) break;
         }
-
         return assignments;
     }
 
     private static double SquaredDistance(IReadOnlyList<double> a, IReadOnlyList<double> b)
     {
         double sum = 0;
-        for (var i = 0; i < a.Count; i++)
-        {
-            var d = a[i] - b[i];
-            sum += d * d;
-        }
+        for (var i = 0; i < a.Count; i++) { var d = a[i] - b[i]; sum += d * d; }
         return sum;
     }
 
-    private static double[] Standardize(
-        IReadOnlyList<double> values,
-        IReadOnlyList<double> means,
-        IReadOnlyList<double> scales)
+    private static double[] Standardize(IReadOnlyList<double> values, IReadOnlyList<double> means, IReadOnlyList<double> scales)
     {
-        if (values.Count != means.Count || values.Count != scales.Count)
-            throw new ArgumentException("Feature standardization dimensions do not match.");
-
+        if (values.Count != means.Count || values.Count != scales.Count) throw new ArgumentException("Feature standardization dimensions do not match.");
         var result = new double[values.Count];
-        for (var i = 0; i < values.Count; i++)
-        {
-            var scale = scales[i] > 0 ? scales[i] : 1e-12;
-            result[i] = (values[i] - means[i]) / scale;
-        }
+        for (var i = 0; i < values.Count; i++) { var scale = scales[i] > 0 ? scales[i] : 1e-12; result[i] = (values[i] - means[i]) / scale; }
         return result;
     }
 
