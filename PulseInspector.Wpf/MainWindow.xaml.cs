@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Data;
 using Microsoft.Win32;
 using PulseInspector.Wpf.ViewModels;
@@ -25,19 +24,31 @@ public partial class MainWindow : Window
     {
         if (ViewModel is null) return;
         ViewModel.WaveformChanged += OnWaveformChanged;
+        ViewModel.OpenFilesRequested += OnOpenFilesRequested;
+        ViewModel.OpenRowsRequested += OnOpenRowsRequested;
+        ViewModel.ExportRequested += OnExportRequested;
         OnWaveformChanged(ViewModel, EventArgs.Empty);
     }
 
-    private void AddGroup_Click(object sender, RoutedEventArgs e)
+    private void OnOpenFilesRequested(object? sender, EventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*", Multiselect = true, Title = "Select waveforms belonging to one group" };
         if (dialog.ShowDialog(this) == true) ViewModel?.AddGroup(dialog.FileNames);
     }
 
-    private void AddRows_Click(object sender, RoutedEventArgs e)
+    private void OnOpenRowsRequested(object? sender, EventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*", Multiselect = true, Title = "Select CSV files (one row = one subgroup)" };
         if (dialog.ShowDialog(this) == true) ViewModel?.AddGroupsFromRows(dialog.FileNames);
+    }
+
+    private void OnExportRequested(object? sender, EventArgs e)
+    {
+        if (ViewModel is null) return;
+        var dialog = new SaveFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*", DefaultExt = ".csv", AddExtension = true, FileName = "inspection-result.csv", Title = "Export inspection result" };
+        if (dialog.ShowDialog(this) != true) return;
+        try { ViewModel.ExportInspection(dialog.FileName); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Export error", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
     private void Training_Click(object sender, RoutedEventArgs e)
@@ -84,7 +95,13 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
-        if (ViewModel is not null) ViewModel.WaveformChanged -= OnWaveformChanged;
+        if (ViewModel is not null)
+        {
+            ViewModel.WaveformChanged -= OnWaveformChanged;
+            ViewModel.OpenFilesRequested -= OnOpenFilesRequested;
+            ViewModel.OpenRowsRequested -= OnOpenRowsRequested;
+            ViewModel.ExportRequested -= OnExportRequested;
+        }
         base.OnClosed(e);
     }
 }
