@@ -6,9 +6,11 @@ namespace PulseInspector.Wpf.Views;
 
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow(GroupDecisionPolicy policy, double confidence, double sampleIntervalSeconds)
+    public SettingsWindow(GroupDecisionPolicy policy, double confidence, double sampleIntervalSeconds, AppTheme theme)
     {
         InitializeComponent();
+        ThemeBox.ItemsSource = new[] { "Light", "Dark" };
+        ThemeBox.SelectedIndex = theme == AppTheme.Dark ? 1 : 0;
         RuleBox.ItemsSource = new[] { "Any defective subgroup", "Defective subgroup rate", "Maximum Mahalanobis" };
         RuleBox.SelectedIndex = (int)policy.Rule;
         RateBox.Text = policy.DefectiveSubgroupRateThreshold.ToString("G6", CultureInfo.InvariantCulture);
@@ -19,11 +21,13 @@ public partial class SettingsWindow : Window
     public GroupDecisionPolicy Policy { get; private set; } = new();
     public double Confidence { get; private set; }
     public double SampleIntervalSeconds { get; private set; }
+    public AppTheme Theme { get; private set; } = AppTheme.Light;
 
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
         try
         {
+            if (ThemeBox.SelectedIndex < 0) throw new InvalidOperationException("A theme is required.");
             if (RuleBox.SelectedIndex < 0) throw new InvalidOperationException("A decision rule is required.");
             var rate = Parse(RateBox.Text, "Defect rate threshold");
             var confidence = Parse(ConfidenceBox.Text, "Confidence");
@@ -32,7 +36,10 @@ public partial class SettingsWindow : Window
             policy.Validate();
             if (confidence <= 0 || confidence >= 1) throw new InvalidOperationException("Confidence must be between 0 and 1.");
             if (interval <= 0) throw new InvalidOperationException("Sample interval must be greater than zero.");
-            Policy = policy; Confidence = confidence; SampleIntervalSeconds = interval;
+            Policy = policy;
+            Confidence = confidence;
+            SampleIntervalSeconds = interval;
+            Theme = ThemeBox.SelectedIndex == 1 ? AppTheme.Dark : AppTheme.Light;
             DialogResult = true;
         }
         catch (Exception ex)
