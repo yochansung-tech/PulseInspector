@@ -1,3 +1,4 @@
+using System.Reflection;
 using PulseInspector.Application.Services;
 using PulseInspector.Models;
 using PulseInspector.Services;
@@ -12,13 +13,24 @@ internal static class Program
         {
             TestFeatureOrder(); TestGroupMeanFeatures(); TestRowBasedCsvLoading(); TestRowBasedCsvEndToEnd();
             TestFeatureExtraction(); TestTrainingValidation(); TestMahalanobisTrainingAndInspection();
-            TestNormalVsDefectivePulseDetection(); TestApplicationFacade(); FeatureDeviationTests.Run(); WinFormsSmokeTest.Run();
+            TestNormalVsDefectivePulseDetection(); TestApplicationFacade(); TestCoreDependencyBoundary(); FeatureDeviationTests.Run(); WinFormsSmokeTest.Run();
             Console.WriteLine("ALL TESTS PASSED"); return 0;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine("TEST FAILURE"); Console.Error.WriteLine(ex); return 1;
         }
+    }
+
+    private static void TestCoreDependencyBoundary()
+    {
+        var coreAssembly = typeof(FeatureVector).Assembly;
+        Assert(coreAssembly.GetName().Name == "PulseInspector.Core", "FeatureVector is not loaded from PulseInspector.Core.");
+
+        var applicationAssembly = typeof(InspectionApplication).Assembly;
+        var references = applicationAssembly.GetReferencedAssemblies();
+        Assert(references.Any(r => r.Name == "PulseInspector.Core"), "Application does not reference PulseInspector.Core directly.");
+        Assert(!references.Any(r => r.Name == "PulseInspector"), "Application must not reference the legacy WinForms assembly directly.");
     }
 
     private static void TestApplicationFacade()
