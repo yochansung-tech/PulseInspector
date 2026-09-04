@@ -2,13 +2,13 @@
 
 ## Status
 
-IN PROGRESS — command-state and empty-state slice implemented.
+COMPLETED — command-state, empty-state, workflow invalidation, and identity-safe subgroup selection implemented.
 
 ## Objective
 
 Complete the MainWindow workflow so that the UI always reflects whether training, inspection, and export are currently valid operations, while keeping domain and numerical logic outside WPF.
 
-## Implemented in this slice
+## Implemented
 
 - `RelayCommand` exposes explicit `RaiseCanExecuteChanged()` support.
 - Train is enabled only when the required number of normal groups is available.
@@ -22,6 +22,9 @@ Complete the MainWindow workflow so that the UI always reflects whether training
 - Model/result state is exposed for UI presentation.
 - Main window has an explicit empty-state message when no groups are loaded.
 - Status area reports model/result state without moving business logic into the view.
+- Subgroup result rows now retain the underlying `WaveformRecord.Id` as stable identity.
+- Selecting a subgroup resolves the waveform by `RecordId`, so DataGrid sorting cannot redirect selection to another record.
+- Display `Index` remains a presentation/sort field and is no longer used as the underlying record lookup key.
 
 ## Invariants
 
@@ -30,10 +33,18 @@ Complete the MainWindow workflow so that the UI always reflects whether training
 3. `FeatureVector` ordering and inspection semantics are not changed by UX work.
 4. Export uses the last completed inspection result; it does not retrain or re-inspect.
 5. A model is never presented as valid after its training inputs/settings have been invalidated.
+6. DataGrid sorting must not change the waveform associated with an already selected subgroup row.
 
-## Follow-up
+## Verification
 
-- Add focused automated tests for command-state transitions without requiring a rendered WPF window.
-- Review subgroup selection against sorted DataGrid views so selection remains tied to the underlying record identity rather than display index.
-- Add visual regression checks for empty/loading/error states.
-- After these are complete, move the migration effort from Phase 1 slice work to WPF Release 1.0 stabilization.
+- Source-level inspection confirms subgroup selection is resolved by stable `WaveformRecord.Id`.
+- Existing Core/Application regression tests remain unchanged for protected numerical behavior.
+- GitHub Actions has not yet produced a workflow run/status for the latest branch head; CI remains pending.
+- Manual Windows verification is still required for WPF rendering, sorting/selection interaction, DPI, keyboard/focus, CSV import/export, and visual states.
+
+## Next stabilization scope
+
+- Add focused automated tests for WPF command-state transitions if the test project is intentionally extended to reference WPF.
+- Add visual regression checks for empty/loading/error states in a Windows-capable UI test environment.
+- Perform manual Windows smoke verification.
+- Once CI and manual verification are complete, prepare the WPF Release 1.0 stabilization PR for final review/merge.
