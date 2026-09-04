@@ -13,4 +13,5 @@ public interface IInspectionApplication
     GroupInspectionResult Inspect(GroupData group, InspectionModel model, GroupDecisionPolicy decisionPolicy);
     IReadOnlyList<SubgroupInspectionResult> InspectSubgroups(GroupData group, InspectionModel model);
     IReadOnlyList<FeatureDeviation> AnalyzeDeviations(FeatureVector vector, InspectionModel model);
+    void ExportInspectionResult(string filePath, GroupInspectionResult result, IReadOnlyList<SubgroupInspectionResult>? subgroupResults = null);
 }
