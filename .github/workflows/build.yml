@@ -2,7 +2,9 @@ name: Build PulseInspector
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'ai/**'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
