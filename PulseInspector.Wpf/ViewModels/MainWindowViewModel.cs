@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using PulseInspector.Application.Contracts;
 using PulseInspector.Models;
+using PulseInspector.Services;
 
 namespace PulseInspector.Wpf.ViewModels;
 
@@ -86,7 +87,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SetStatus($"Settings applied: rule={policy.Rule}, confidence={confidence:G6}, dt={sampleIntervalSeconds:E3}s"); RaiseCommandStates();
     }
 
-    private void AddGroupModel(GroupData group) { _groupModels.Add(group); var vm = new GroupViewModel(group); Groups.Add(vm); SelectedGroup = vm; RaiseCommandStates(); }
+    private void AddGroupModel(GroupData group) { _groupModels.Add(group); var vm = new GroupViewModel(group); Groups.Add(vm); OnPropertyChanged(nameof(NormalGroupCount)); SelectedGroup = vm; RaiseCommandStates(); }
     private void AddGroupPlaceholder() => OpenFilesRequested?.Invoke(this, EventArgs.Empty);
     private void AddRowsPlaceholder() => OpenRowsRequested?.Invoke(this, EventArgs.Empty);
 
