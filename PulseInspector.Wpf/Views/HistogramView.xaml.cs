@@ -50,10 +50,11 @@ public partial class HistogramView : UserControl
 
         var maxCount = Math.Max(1, counts.Max());
         var barWidth = width / bins;
+        var chartBrush = (Brush)FindResource("ChartBrush");
         for (var i = 0; i < bins; i++)
         {
             var barHeight = height * counts[i] / maxCount;
-            var bar = new Rectangle { Width = Math.Max(1, barWidth - 3), Height = barHeight, Fill = SystemColors.HighlightBrush };
+            var bar = new Rectangle { Width = Math.Max(1, barWidth - 3), Height = barHeight, Fill = chartBrush };
             Canvas.SetLeft(bar, 10 + i * barWidth);
             Canvas.SetTop(bar, height - barHeight + 10);
             PlotCanvas.Children.Add(bar);
