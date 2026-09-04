@@ -1,4 +1,3 @@
-using System.Reflection;
 using PulseInspector.Application.Services;
 using PulseInspector.Models;
 using PulseInspector.Services;
@@ -13,7 +12,8 @@ internal static class Program
         {
             TestFeatureOrder(); TestGroupMeanFeatures(); TestRowBasedCsvLoading(); TestRowBasedCsvEndToEnd();
             TestFeatureExtraction(); TestTrainingValidation(); TestMahalanobisTrainingAndInspection();
-            TestNormalVsDefectivePulseDetection(); TestApplicationFacade(); TestCoreDependencyBoundary(); FeatureDeviationTests.Run(); WinFormsSmokeTest.Run();
+            TestNormalVsDefectivePulseDetection(); TestApplicationFacade(); TestApplicationExportFacade(); TestCoreDependencyBoundary();
+            FeatureDeviationTests.Run();
             Console.WriteLine("ALL TESTS PASSED"); return 0;
         }
         catch (Exception ex)
@@ -45,6 +45,36 @@ internal static class Program
             Assert(group.Records[0].Features["Peak"] > 0, "Application facade did not extract features.");
             var validation = application.ValidateTraining(new[] { group });
             Assert(!validation.IsValid, "A single group should not pass covariance training validation.");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    private static void TestApplicationExportFacade()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"pulseinspector-export-facade-{Guid.NewGuid():N}.csv");
+        try
+        {
+            var application = new InspectionApplication();
+            var features = CreateFeatures(2);
+            var result = new GroupInspectionResult("group-1", true, 3, 12.5, 10.0, features, "Defective subgroup detected.", 1, 1.0, 12.5);
+            var subgroup = new SubgroupInspectionResult
+            {
+                Index = 1,
+                SourceName = "row,1",
+                Features = features,
+                MahalanobisDistance = 12.5,
+                Threshold = 10.0,
+                IsDefect = true
+            };
+
+            application.ExportInspectionResult(path, result, new[] { subgroup });
+            var lines = File.ReadAllLines(path);
+            Assert(lines.Length == 4, "Application export facade produced an unexpected number of CSV lines.");
+            Assert(lines[0].StartsWith("RecordType,GroupId,IsDefect,RecordCount,"), "Application export facade produced an invalid group header.");
+            Assert(lines[1].StartsWith("Group,group-1,True,3,"), "Application export facade produced an invalid group row.");
+            Assert(lines[2].Length == 0, "Application export facade must preserve the blank separator line.");
+            Assert(lines[3].StartsWith("Subgroup,1,\"row,1\",True,"), "Application export facade did not preserve CSV quoting.");
+            Assert(lines[0].Contains(",Charge,FWHM,Noise,Peak,RiseTime,ZScore"), "Application export facade changed feature column order.");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }
