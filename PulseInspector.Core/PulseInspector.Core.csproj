@@ -8,9 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\PulseInspector\Models\**\*.cs"
-             Link="Models\%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="..\PulseInspector\Services\**\*.cs"
-             Link="Services\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="Models\**\*.cs" />
+    <Compile Include="Services\**\*.cs" />
   </ItemGroup>
 </Project>
