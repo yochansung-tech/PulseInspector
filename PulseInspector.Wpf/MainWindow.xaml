@@ -32,13 +32,29 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Text="Groups" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                        <TextBlock Text="{Binding NormalGroupCount, StringFormat=Normal groups: {0}}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,2"/>
-                        <TextBlock Text="{Binding RequiredTrainingGroupCount, StringFormat=Required for training: {0}}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                            <TextBlock Text="Normal groups: " Foreground="{DynamicResource MutedTextBrush}"/>
+                            <TextBlock Text="{Binding NormalGroupCount}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="Required for training: " Foreground="{DynamicResource MutedTextBrush}"/>
+                            <TextBlock Text="{Binding RequiredTrainingGroupCount}"/>
+                        </StackPanel>
                     </StackPanel>
                     <CheckBox DockPanel.Dock="Bottom" Content="Selected group is defective" IsChecked="{Binding SelectedGroupIsDefective, Mode=TwoWay}" Margin="0,8,0,0" AutomationProperties.Name="Selected group is defective"/>
                     <Grid>
                         <ListBox ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup, Mode=TwoWay}" DisplayMemberPath="DisplayName" AutomationProperties.Name="Groups" Visibility="{Binding HasGroups, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding HasGroups, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasGroups}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
                             <TextBlock Text="No groups loaded" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                             <TextBlock Text="Add Group or Add Groups by Rows to begin." Foreground="{DynamicResource MutedTextBrush}" TextAlignment="Center" Margin="0,6,0,0"/>
                         </StackPanel>
@@ -71,9 +87,9 @@
             <DockPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                     <TextBlock Text="Model: " Foreground="{DynamicResource MutedTextBrush}"/>
-                    <TextBlock Text="{Binding IsModelTrained, StringFormat={}{0}}" Margin="0,0,16,0"/>
+                    <TextBlock Text="{Binding IsModelTrained}" Margin="0,0,16,0"/>
                     <TextBlock Text="Result: " Foreground="{DynamicResource MutedTextBrush}"/>
-                    <TextBlock Text="{Binding HasInspectionResult, StringFormat={}{0}}"/>
+                    <TextBlock Text="{Binding HasInspectionResult}"/>
                 </StackPanel>
                 <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource TextBrush}" AutomationProperties.Name="Application status" TextTrimming="CharacterEllipsis"/>
             </DockPanel>
