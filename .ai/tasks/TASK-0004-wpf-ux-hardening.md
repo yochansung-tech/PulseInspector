@@ -2,7 +2,7 @@
 
 ## Status
 
-COMPLETED — command-state, empty-state, workflow invalidation, and identity-safe subgroup selection implemented.
+IMPLEMENTED — command-state, empty-state, workflow invalidation, and identity-safe subgroup selection are implemented; automated CI/manual verification remains pending.
 
 ## Objective
 
@@ -22,9 +22,10 @@ Complete the MainWindow workflow so that the UI always reflects whether training
 - Model/result state is exposed for UI presentation.
 - Main window has an explicit empty-state message when no groups are loaded.
 - Status area reports model/result state without moving business logic into the view.
-- Subgroup result rows now retain the underlying `WaveformRecord.Id` as stable identity.
+- Subgroup result rows retain the underlying `WaveformRecord.Id` as stable identity.
 - Selecting a subgroup resolves the waveform by `RecordId`, so DataGrid sorting cannot redirect selection to another record.
 - Display `Index` remains a presentation/sort field and is no longer used as the underlying record lookup key.
+- Build workflow is configured to run on `main`, migration branches, and pull requests targeting `main`.
 
 ## Invariants
 
@@ -38,13 +39,15 @@ Complete the MainWindow workflow so that the UI always reflects whether training
 ## Verification
 
 - Source-level inspection confirms subgroup selection is resolved by stable `WaveformRecord.Id`.
-- Existing Core/Application regression tests remain unchanged for protected numerical behavior.
-- GitHub Actions has not yet produced a workflow run/status for the latest branch head; CI remains pending.
+- Existing Core/Application regression tests remain in the repository.
+- A temporary WPF command-transition test was reviewed and not retained because the current executable regression harness would require a separate controlled WPF test fixture; no unverified test is committed.
+- GitHub Actions is configured to execute for the migration branch, but the latest run must be observed before declaring CI pass.
 - Manual Windows verification is still required for WPF rendering, sorting/selection interaction, DPI, keyboard/focus, CSV import/export, and visual states.
 
 ## Next stabilization scope
 
-- Add focused automated tests for WPF command-state transitions if the test project is intentionally extended to reference WPF.
+- Observe and resolve any CI build/test failures.
+- Add a dedicated Windows-capable WPF UI test fixture for command-state and selection interaction.
 - Add visual regression checks for empty/loading/error states in a Windows-capable UI test environment.
 - Perform manual Windows smoke verification.
 - Once CI and manual verification are complete, prepare the WPF Release 1.0 stabilization PR for final review/merge.
