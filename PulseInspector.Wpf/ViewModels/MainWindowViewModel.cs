@@ -12,6 +12,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly IInspectionApplication _application;
     private readonly List<GroupData> _groupModels = new();
     private InspectionModel? _model;
+    private GroupInspectionResult? _lastInspectionResult;
+    private IReadOnlyList<SubgroupInspectionResult> _lastSubgroupResults = Array.Empty<SubgroupInspectionResult>();
     private GroupViewModel? _selectedGroup;
     private SubgroupResultViewModel? _selectedSubgroup;
     private string _statusText = "Ready";
@@ -30,6 +32,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ClearGroupsCommand = new RelayCommand(ClearGroups, () => Groups.Count > 0);
         TrainCommand = new RelayCommand(TrainModel, () => NormalGroupCount >= RequiredTrainingGroups);
         InspectCommand = new RelayCommand(Inspect, () => SelectedGroup is not null && NormalGroupCountExcludingSelection >= RequiredTrainingGroups);
+        ExportCommand = new RelayCommand(() => ExportRequested?.Invoke(this, EventArgs.Empty), () => _lastInspectionResult is not null);
     }
 
     private static int RequiredTrainingGroups => FeatureVector.StatisticalFeatureCount + 1;
@@ -42,6 +45,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public RelayCommand ClearGroupsCommand { get; }
     public RelayCommand TrainCommand { get; }
     public RelayCommand InspectCommand { get; }
+    public RelayCommand ExportCommand { get; }
 
     public GroupViewModel? SelectedGroup { get => _selectedGroup; set { if (ReferenceEquals(_selectedGroup, value)) return; _selectedGroup = value; OnPropertyChanged(); OnPropertyChanged(nameof(SelectedGroupIsDefective)); ShowSelectedGroup(); RaiseCommandStates(); } }
     public SubgroupResultViewModel? SelectedSubgroup { get => _selectedSubgroup; set { if (ReferenceEquals(_selectedSubgroup, value)) return; _selectedSubgroup = value; OnPropertyChanged(); ShowSelectedSubgroup(); } }
@@ -59,6 +63,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public event EventHandler? WaveformChanged;
     public event EventHandler? OpenFilesRequested;
     public event EventHandler? OpenRowsRequested;
+    public event EventHandler? ExportRequested;
 
     public void AddGroup(IEnumerable<string> filePaths)
     {
@@ -76,6 +81,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         var normal = _groupModels.Where(g => !g.IsDefective).ToArray();
         return _application.ValidateTraining(normal);
+    }
+
+    public void ExportInspection(string filePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        if (_lastInspectionResult is null) throw new InvalidOperationException("No inspection result is available to export.");
+        _application.ExportInspectionResult(filePath, _lastInspectionResult, _lastSubgroupResults);
+        SetStatus($"Inspection result exported: {filePath}");
     }
 
     public void ApplySettings(GroupDecisionPolicy policy, double confidence, double sampleIntervalSeconds)
@@ -127,24 +140,28 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             if (!validation.IsValid) { SetStatus($"Inspection training validation failed: {validation.Issues.First(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)).Message}"); return; }
             _model = _application.Train(training, Confidence);
             var result = _application.Inspect(SelectedGroup.Model, _model, _decisionPolicy);
+            _lastInspectionResult = result;
             SetFeatures(result.Features);
             Deviations.Clear();
             foreach (var d in _application.AnalyzeDeviations(result.Features, _model)) Deviations.Add(new FeatureDeviationViewModel(d.FeatureName, d.Value, d.Mean, d.StandardDeviation, d.ZScore, d.AbsoluteZScore, d.MahalanobisContribution));
+            var subgroupResults = _application.InspectSubgroups(SelectedGroup.Model, _model);
+            _lastSubgroupResults = subgroupResults;
             Subgroups.Clear();
-            foreach (var row in _application.InspectSubgroups(SelectedGroup.Model, _model)) Subgroups.Add(new SubgroupResultViewModel(row.Index, row.SourceName, row.MahalanobisDistance, row.Threshold, row.IsDefect));
+            foreach (var row in subgroupResults) Subgroups.Add(new SubgroupResultViewModel(row.Index, row.SourceName, row.MahalanobisDistance, row.Threshold, row.IsDefect));
             MahalanobisValues = Subgroups.Select(s => s.MahalanobisDistance).ToArray();
             MahalanobisPoints = Subgroups.Select(s => new ChartPointViewModel(s.Index, s.MahalanobisDistance)).ToArray();
             SetStatus($"Group {ShortId(SelectedGroup.Model)}: {(result.IsDefect ? "DEFECT" : "NORMAL")} | MD={result.MahalanobisDistance:F6} | Threshold={result.Threshold:F6}");
+            RaiseCommandStates();
         }
-        catch (Exception ex) { _model = null; SetStatus($"Inspection failed: {ex.Message}"); }
+        catch (Exception ex) { _model = null; _lastInspectionResult = null; _lastSubgroupResults = Array.Empty<SubgroupInspectionResult>(); RaiseCommandStates(); SetStatus($"Inspection failed: {ex.Message}"); }
     }
 
     public void SetSelectedGroupDefective(bool value) { if (SelectedGroup is null) return; SelectedGroup.IsDefective = value; OnPropertyChanged(nameof(SelectedGroupIsDefective)); OnPropertyChanged(nameof(NormalGroupCount)); RaiseCommandStates(); }
     private void SetFeatures(FeatureVector vector) { Features.Clear(); foreach (var name in FeatureVector.FeatureNames) Features.Add(new FeatureValueViewModel(name, vector[name])); }
-    private void ClearInspectionResults() { Deviations.Clear(); Subgroups.Clear(); MahalanobisValues = Array.Empty<double>(); MahalanobisPoints = Array.Empty<ChartPointViewModel>(); }
+    private void ClearInspectionResults() { _lastInspectionResult = null; _lastSubgroupResults = Array.Empty<SubgroupInspectionResult>(); Deviations.Clear(); Subgroups.Clear(); MahalanobisValues = Array.Empty<double>(); MahalanobisPoints = Array.Empty<ChartPointViewModel>(); RaiseCommandStates(); }
     public void SetStatus(string message) => StatusText = message ?? string.Empty;
     private static string ShortId(GroupData group) => group.Id[..Math.Min(8, group.Id.Length)];
-    private void RaiseCommandStates() { ClearGroupsCommand.RaiseCanExecuteChanged(); TrainCommand.RaiseCanExecuteChanged(); InspectCommand.RaiseCanExecuteChanged(); }
+    private void RaiseCommandStates() { ClearGroupsCommand.RaiseCanExecuteChanged(); TrainCommand.RaiseCanExecuteChanged(); InspectCommand.RaiseCanExecuteChanged(); ExportCommand.RaiseCanExecuteChanged(); }
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     public event PropertyChangedEventHandler? PropertyChanged;
 }
