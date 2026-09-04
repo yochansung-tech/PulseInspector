@@ -4,105 +4,85 @@
 
 Move the presentation layer from WinForms to WPF without rewriting or destabilizing the existing waveform-processing, feature-extraction, statistical, CSV, and group-inspection domain behavior.
 
-The target architecture separates presentation from reusable application/domain logic and allows a controlled hybrid period during migration.
+The migration target is now a native WPF application shell over UI-independent Core/Application layers. The former hybrid WindowsFormsHost path was a migration option only and is no longer part of the active branch architecture.
 
 ## 2. Current architecture
 
 ```text
-PulseInspector
-├── Forms
-│   ├── MainForm
-│   ├── SettingsForm
-│   ├── TrainingForm
-│   └── AboutForm
-├── Controls
-│   ├── WaveformControl
-│   ├── FeatureGrid
-│   ├── FeatureDeviationGrid
-│   ├── HistogramControl
-│   ├── ScatterPlotControl
-│   └── StatusIndicator
-├── Models
-└── Services
+PulseInspector.sln
+├── PulseInspector.Wpf
+│   ├── Views
+│   ├── ViewModels
+│   └── Themes
+├── PulseInspector.Application
+│   └── Contracts / application facade
+├── PulseInspector.Core
+│   ├── Models
+│   └── Services
+└── PulseInspector.Tests
 ```
 
-The current application is the behavioral baseline. UI modernization must not implicitly change the semantics of Models or Services.
+The Core/Application layers own the protected behavioral baseline. WPF owns presentation and UI orchestration only.
 
 ## 3. Target architecture
 
 ```text
-PulseInspector.sln
-├── PulseInspector                 # existing WinForms application during migration
-├── PulseInspector.Tests
-└── PulseInspector.Wpf             # introduced in a later phase
-    ├── Views
-    ├── ViewModels
-    ├── Controls
-    ├── Resources
-    ├── Themes
-    └── Services / Adapters
+WPF View
+   ↓
+ViewModel
+   ↓
+Application Facade / Use Case Boundary
+   ↓
+Core Services
+   ↓
+Core Models
 ```
-
-A later refactoring may extract reusable non-UI code into a dedicated Core project if dependency analysis proves that this reduces coupling. Phase 0 does not perform that extraction.
 
 ## 4. Layer responsibilities
 
-### Domain / application logic
-Owns waveform processing, feature extraction, statistics, group inspection, models and data semantics.
+### Core
+Owns waveform processing, feature extraction, statistics, group/subgroup inspection, models, CSV parsing/export logic and data semantics.
 
-### Adapter layer
-Translates between legacy APIs/data contracts and WPF-facing interfaces. Prefer adapters over invasive changes to stable legacy services.
+### Application
+Owns composition/orchestration boundaries used by the UI. It delegates numerical and domain work to Core and exposes UI-safe use cases.
 
-### ViewModel layer
-Owns presentation state, commands, validation state and orchestration of UI interactions. It must not duplicate signal-processing or statistical algorithms.
+### ViewModel
+Owns presentation state, commands, readiness/validation state and UI workflow orchestration. It must not duplicate signal-processing or statistical algorithms.
 
-### View layer
-Owns WPF visual structure, bindings, templates, styles, accessibility metadata and visual states. Views must not contain business rules.
+### View
+Owns WPF visual structure, bindings, templates, styles, accessibility metadata and visual states. Code-behind is limited to UI infrastructure such as dialogs, window ownership and visual event wiring.
 
 ### Design system
-Owns colors, typography, spacing, dimensions, control states, icons and reusable visual resources through centralized WPF resources.
+Owns colors, typography, spacing, dimensions, control states and reusable visual resources through centralized WPF resources.
 
-## 5. Hybrid migration architecture
+## 5. Hybrid migration decision
 
-During migration both UI technologies may coexist:
+The original plan allowed `WindowsFormsHost` as a temporary adapter. The active branch no longer uses `WindowsFormsHost`; the migrated waveform, feature tables, histogram and scatter views are native WPF implementations.
 
-```text
-WPF Shell
-   │
-   ├── Native WPF View
-   │      └── ViewModel
-   │
-   └── WindowsFormsHost
-          └── Legacy WinForms UserControl
-```
+A future return to hosted WinForms controls would require an explicit architecture decision and regression evidence.
 
-`WindowsFormsHost` is an intentional migration adapter, not the final target architecture. Each hosted control must have a documented migration decision and regression evidence.
+## 6. Migrated UI map
 
-## 6. Candidate migration map
-
-Initial hypotheses to be validated during Phase 0 analysis:
-
-| Current component | Target direction | Initial risk |
-|---|---|---:|
-| MainForm | WPF shell + MainViewModel | High |
-| SettingsForm | Native WPF view | Medium |
-| TrainingForm | Native WPF view | High |
-| AboutForm | Native WPF view | Low |
-| WaveformControl | Initially host, then evaluate native WPF rewrite | High |
-| FeatureGrid | WPF DataGrid | Medium |
-| FeatureDeviationGrid | WPF DataGrid | Medium |
-| HistogramControl | WPF visualization | High |
-| ScatterPlotControl | WPF visualization | High |
-| StatusIndicator | Native WPF custom control | Low |
-
-This table is a planning hypothesis. The final decision belongs in `.ai/analysis/control-map.md` after source-level dependency and event analysis.
+| Former WinForms component | Active WPF target | Status |
+|---|---|---|
+| MainForm | MainWindow + MainWindowViewModel | Native WPF |
+| SettingsForm | SettingsWindow | Native WPF |
+| TrainingForm | TrainingWindow | Native WPF |
+| AboutForm | AboutWindow | Native WPF |
+| WaveformControl | WaveformView | Native WPF |
+| FeatureGrid | WPF DataGrid | Native WPF |
+| FeatureDeviationGrid | WPF DataGrid | Native WPF |
+| HistogramControl | HistogramView | Native WPF |
+| ScatterPlotControl | ScatterPlotView | Native WPF |
+| StatusIndicator | MainWindow status presentation | Native WPF |
 
 ## 7. Protected contracts
 
 The following are architectural invariants for UI modernization:
 
-- `FeatureVector` deterministic ordering
-- six-feature statistical model definition
+- deterministic complete feature ordering
+- five independent statistical features used by the Mahalanobis model
+- diagnostic Z-score semantics
 - Mahalanobis calculation inputs
 - threshold calculation semantics
 - group/subgroup aggregation semantics
@@ -122,25 +102,27 @@ WPF View
    ↓
 ViewModel
    ↓
-Application / Adapter interfaces
+Application interfaces/facade
    ↓
-Existing Services / Domain logic
+Core services
    ↓
-Models
+Core models
 ```
 
-The reverse direction is prohibited: domain/service code must not acquire dependencies on WPF controls, windows, resource dictionaries, or view-model types.
+The reverse direction is prohibited: Core and Application must not acquire dependencies on WPF controls, windows, resource dictionaries, or view-model types.
 
 ## 9. Testing architecture
 
 Regression evidence is required at three levels:
 
-1. Domain regression — existing unit tests plus golden waveform/group cases.
-2. Integration regression — loading, training, inspection and export workflows.
-3. Visual regression — screenshots/layout/DPI/focus/keyboard behavior for migrated screens.
+1. Domain regression — executable Core/Application regression suite and protected golden-data cases.
+2. Integration regression — CSV loading, training, inspection, subgroup selection and export workflow.
+3. Visual regression — screenshots/layout/DPI/focus/keyboard behavior for migrated screens in a Windows-capable environment.
 
-A UI migration is complete only when the new presentation produces the same protected domain outputs for equivalent inputs.
+The current CI workflow builds Core, Application and WPF on Windows and runs the executable algorithm regression suite.
 
-## 10. Phase 0 architectural decision
+## 10. Release 1.0 stabilization
 
-Do not add `PulseInspector.Wpf` during Phase 0. First produce the project map, UI inventory, dependency map, service map, control map, event map and migration-risk assessment. Phase 1 may then introduce the WPF shell using the evidence produced by Phase 0.
+The migration branch has completed the native WPF MainWindow workflow slice, command-state hardening, stable subgroup selection identity, native visualization views and legacy WinForms source retirement.
+
+Remaining release gates are CI green on the current head and manual Windows verification of rendering, DPI, focus/keyboard behavior and representative import → training → inspection → export workflows.
