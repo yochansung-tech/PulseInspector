@@ -40,11 +40,12 @@ public partial class ScatterPlotView : UserControl
         var minY = Math.Min(0, points.Min(p => p.Y)); var maxY = points.Max(p => p.Y);
         if (maxX <= minX) maxX = minX + 1;
         if (maxY <= minY) maxY = minY + 1;
+        var chartBrush = (Brush)FindResource("ChartBrush");
         foreach (var point in points)
         {
             var x = 15 + (point.X - minX) / (maxX - minX) * width;
             var y = 15 + height - (point.Y - minY) / (maxY - minY) * height;
-            var ellipse = new Ellipse { Width = 8, Height = 8, Fill = SystemColors.HighlightBrush, ToolTip = $"#{point.X:G0}: MD={point.Y:F6}" };
+            var ellipse = new Ellipse { Width = 8, Height = 8, Fill = chartBrush, ToolTip = $"#{point.X:G0}: MD={point.Y:F6}" };
             Canvas.SetLeft(ellipse, x - 4); Canvas.SetTop(ellipse, y - 4);
             PlotCanvas.Children.Add(ellipse);
         }
