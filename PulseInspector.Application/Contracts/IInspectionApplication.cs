@@ -10,4 +10,5 @@ public interface IInspectionApplication
     InspectionModel Train(IEnumerable<GroupData> normalGroups, double confidence);
     GroupInspectionResult Inspect(GroupData group, InspectionModel model, GroupDecisionPolicy decisionPolicy);
     IReadOnlyList<SubgroupInspectionResult> InspectSubgroups(GroupData group, InspectionModel model);
+    IReadOnlyList<FeatureDeviation> AnalyzeDeviations(FeatureVector vector, InspectionModel model);
 }
