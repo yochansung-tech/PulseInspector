@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>PulseInspector</RootNamespace>
+    <AssemblyName>PulseInspector.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\PulseInspector\Models\**\*.cs"
+             Link="Models\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\PulseInspector\Services\**\*.cs"
+             Link="Services\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
