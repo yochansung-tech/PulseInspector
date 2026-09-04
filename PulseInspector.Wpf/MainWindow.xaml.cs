@@ -61,8 +61,12 @@ public partial class MainWindow : Window
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is null) return;
-        var window = new SettingsWindow(ViewModel.DecisionPolicy, ViewModel.Confidence, ViewModel.SampleIntervalSeconds) { Owner = this };
-        if (window.ShowDialog() == true) ViewModel.ApplySettings(window.Policy, window.Confidence, window.SampleIntervalSeconds);
+        var window = new SettingsWindow(ViewModel.DecisionPolicy, ViewModel.Confidence, ViewModel.SampleIntervalSeconds, ThemeManager.CurrentTheme) { Owner = this };
+        if (window.ShowDialog() == true)
+        {
+            ThemeManager.Apply(window.Theme);
+            ViewModel.ApplySettings(window.Policy, window.Confidence, window.SampleIntervalSeconds);
+        }
     }
 
     private void About_Click(object sender, RoutedEventArgs e)
