@@ -10,25 +10,14 @@ internal static class Program
     {
         try
         {
-            TestFeatureOrder();
-            TestGroupMeanFeatures();
-            TestRowBasedCsvLoading();
-            TestRowBasedCsvEndToEnd();
-            TestFeatureExtraction();
-            TestTrainingValidation();
-            TestMahalanobisTrainingAndInspection();
-            TestNormalVsDefectivePulseDetection();
-            TestApplicationFacade();
-            FeatureDeviationTests.Run();
-            WinFormsSmokeTest.Run();
-            Console.WriteLine("ALL TESTS PASSED");
-            return 0;
+            TestFeatureOrder(); TestGroupMeanFeatures(); TestRowBasedCsvLoading(); TestRowBasedCsvEndToEnd();
+            TestFeatureExtraction(); TestTrainingValidation(); TestMahalanobisTrainingAndInspection();
+            TestNormalVsDefectivePulseDetection(); TestApplicationFacade(); FeatureDeviationTests.Run(); WinFormsSmokeTest.Run();
+            Console.WriteLine("ALL TESTS PASSED"); return 0;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine("TEST FAILURE");
-            Console.Error.WriteLine(ex);
-            return 1;
+            Console.Error.WriteLine("TEST FAILURE"); Console.Error.WriteLine(ex); return 1;
         }
     }
 
@@ -37,7 +26,7 @@ internal static class Program
         var path = Path.Combine(Path.GetTempPath(), $"pulseinspector-app-{Guid.NewGuid():N}.csv");
         try
         {
-            File.WriteAllText(path, "0,1,2,1,0\n");
+            File.WriteAllText(path, "0\n1\n2\n1\n0\n");
             var application = new InspectionApplication();
             var group = application.LoadGroup(new[] { path }, 1e-6);
             Assert(group.RecordCount == 1, "Application facade did not load one waveform.");
@@ -53,7 +42,6 @@ internal static class Program
         var expectedStatistical = new[] { "Charge", "FWHM", "Noise", "Peak", "RiseTime" };
         Assert(FeatureVector.StatisticalFeatureNames.SequenceEqual(expectedStatistical), "Statistical feature order changed.");
         Assert(FeatureVector.StatisticalFeatureCount == expectedStatistical.Length, "Statistical feature count changed.");
-
         var vector = FeatureVector.FromStatisticalArray(new[] { 1d, 2d, 3d, 4d, 5d });
         Assert(vector.ToStatisticalArray().SequenceEqual(new[] { 1d, 2d, 3d, 4d, 5d }), "Statistical array round-trip failed.");
         Assert(FeatureVector.FeatureNames.Contains("ZScore"), "Diagnostic ZScore feature is missing.");
@@ -110,25 +98,21 @@ internal static class Program
         var extractor = new FeatureExtractor();
         var waveform = new[] { 0d, 1d, 3d, 6d, 3d, 1d, 0d };
         var features = extractor.Extract(waveform, 1e-6);
-        foreach (var name in FeatureVector.StatisticalFeatureNames)
-            Assert(double.IsFinite(features[name]), $"Feature '{name}' is not finite.");
-        Assert(features["Peak"] > 0, "Peak extraction failed.");
-        Assert(features["Charge"] > 0, "Charge extraction failed.");
+        foreach (var name in FeatureVector.StatisticalFeatureNames) Assert(double.IsFinite(features[name]), $"Feature '{name}' is not finite.");
+        Assert(features["Peak"] > 0, "Peak extraction failed."); Assert(features["Charge"] > 0, "Charge extraction failed.");
     }
 
     private static void TestTrainingValidation()
     {
-        var vectors = Enumerable.Range(0, 7).Select(i => CreateTrainingFeatures(i)).ToArray();
-        var service = new InspectionService();
-        var validation = service.ValidateTraining(vectors);
+        var vectors = Enumerable.Range(0, 7).Select(CreateTrainingFeatures).ToArray();
+        var validation = new InspectionService().ValidateTraining(vectors);
         Assert(!validation.Issues.Any(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)), "Valid training vectors were rejected by validation.");
     }
 
     private static void TestMahalanobisTrainingAndInspection()
     {
-        var vectors = Enumerable.Range(0, 10).Select(i => CreateTrainingFeatures(i)).ToArray();
-        var service = new InspectionService();
-        var model = service.Train(vectors, 0.999);
+        var vectors = Enumerable.Range(0, 10).Select(CreateTrainingFeatures).ToArray();
+        var service = new InspectionService(); var model = service.Train(vectors, 0.999);
         Assert(model.Mean.Length == FeatureVector.StatisticalFeatureCount, "Model feature dimension is incorrect.");
         Assert(model.InverseCovariance.GetLength(0) == FeatureVector.StatisticalFeatureCount, "Inverse covariance dimension is incorrect.");
         Assert(model.InverseCovariance.GetLength(1) == FeatureVector.StatisticalFeatureCount, "Inverse covariance dimension is incorrect.");
@@ -140,11 +124,9 @@ internal static class Program
 
     private static void TestNormalVsDefectivePulseDetection()
     {
-        var training = Enumerable.Range(0, 12).Select(i => CreateTrainingFeatures(i)).ToArray();
-        var service = new InspectionService();
-        var model = service.Train(training, 0.99);
-        var normal = CreateTrainingFeatures(6);
-        var defect = CreateTrainingFeatures(100);
+        var training = Enumerable.Range(0, 12).Select(CreateTrainingFeatures).ToArray();
+        var service = new InspectionService(); var model = service.Train(training, 0.99);
+        var normal = CreateTrainingFeatures(6); var defect = CreateTrainingFeatures(100);
         defect["Peak"] *= 8; defect["Charge"] *= 8; defect["Noise"] *= 5;
         Assert(!service.Inspect(normal, model).IsDefect, "Normal synthetic sample was classified as defect.");
         Assert(service.Inspect(defect, model).IsDefect, "Strong synthetic defect was not detected.");
@@ -152,23 +134,15 @@ internal static class Program
 
     private static FeatureVector CreateTrainingFeatures(int index)
     {
-        var x = index - 5.5;
-        var f = new FeatureVector();
-        f["Peak"] = 1.0 + 0.03 * x + 0.002 * x * x;
-        f["Charge"] = 2.0e-6 + 0.12e-6 * x + 0.01e-6 * x * x;
-        f["RiseTime"] = 4.0e-6 + 0.08e-6 * x;
-        f["FWHM"] = 6.0e-6 + 0.12e-6 * x + 0.01e-6 * x * x;
-        f["Noise"] = 0.03 + 0.003 * x;
-        f["ZScore"] = 0;
-        return f;
+        var x = index - 5.5; var f = new FeatureVector();
+        f["Peak"] = 1.0 + 0.03 * x + 0.002 * x * x; f["Charge"] = 2.0e-6 + 0.12e-6 * x + 0.01e-6 * x * x;
+        f["RiseTime"] = 4.0e-6 + 0.08e-6 * x; f["FWHM"] = 6.0e-6 + 0.12e-6 * x + 0.01e-6 * x * x;
+        f["Noise"] = 0.03 + 0.003 * x; f["ZScore"] = 0; return f;
     }
 
     private static FeatureVector CreateFeatures(double value)
     {
-        var f = new FeatureVector();
-        foreach (var name in FeatureVector.StatisticalFeatureNames) f[name] = value;
-        f["ZScore"] = value;
-        return f;
+        var f = new FeatureVector(); foreach (var name in FeatureVector.StatisticalFeatureNames) f[name] = value; f["ZScore"] = value; return f;
     }
 
     private static void Assert(bool condition, string message)
