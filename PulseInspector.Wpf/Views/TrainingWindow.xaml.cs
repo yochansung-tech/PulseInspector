@@ -1,5 +1,5 @@
-using System.Collections.ObjectModel;
 using System.Windows;
+using PulseInspector.Services;
 using PulseInspector.Wpf.ViewModels;
 
 namespace PulseInspector.Wpf.Views;
@@ -27,9 +27,9 @@ public partial class TrainingWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
-    private Services.TrainingValidationResult RefreshValidation()
+    private TrainingValidationResult RefreshValidation()
     {
-        Services.TrainingValidationResult validation;
+        TrainingValidationResult validation;
         try
         {
             validation = _viewModel.ValidateTraining();
@@ -38,9 +38,9 @@ public partial class TrainingWindow : Window
         {
             StatusText.Text = $"Validation failed: {ex.Message}";
             IssuesGrid.ItemsSource = new[] { new TrainingIssueRow("ERROR", "", ex.Message) };
-            return new Services.TrainingValidationResult
+            return new TrainingValidationResult
             {
-                Issues = new[] { new Services.TrainingValidationIssue("", "ERROR_EXCEPTION", ex.Message) }
+                Issues = new[] { new TrainingValidationIssue("", "ERROR_EXCEPTION", ex.Message) }
             };
         }
 
