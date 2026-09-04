@@ -249,9 +249,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private void ShowSelectedSubgroup()
     {
         if (SelectedGroup is null || SelectedSubgroup is null) return;
-        var recordIndex = SelectedSubgroup.Index - 1;
-        if (recordIndex < 0 || recordIndex >= SelectedGroup.Model.Records.Count) return;
-        var record = SelectedGroup.Model.Records[recordIndex];
+
+        // DataGrid sorting changes row order, so Index is presentation-only.
+        // RecordId is the stable identity used to recover the underlying waveform.
+        var record = SelectedGroup.Model.Records.FirstOrDefault(r =>
+            string.Equals(r.Id, SelectedSubgroup.RecordId, StringComparison.Ordinal));
+        if (record is null) return;
+
         Waveform = record.Samples;
         SetFeatures(record.Features);
         SetStatus($"Selected subgroup #{SelectedSubgroup.Index}: {SelectedSubgroup.SourceName}");
@@ -317,8 +321,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             var subgroupResults = _application.InspectSubgroups(SelectedGroup.Model, _model);
             _lastSubgroupResults = subgroupResults;
             Subgroups.Clear();
-            foreach (var row in subgroupResults)
-                Subgroups.Add(new SubgroupResultViewModel(row.Index, row.SourceName, row.MahalanobisDistance, row.Threshold, row.IsDefect));
+            for (var index = 0; index < subgroupResults.Count; index++)
+            {
+                var row = subgroupResults[index];
+                var recordId = index < SelectedGroup.Model.Records.Count
+                    ? SelectedGroup.Model.Records[index].Id
+                    : string.Empty;
+                Subgroups.Add(new SubgroupResultViewModel(row.Index, row.SourceName, recordId, row.MahalanobisDistance, row.Threshold, row.IsDefect));
+            }
 
             MahalanobisValues = Subgroups.Select(s => s.MahalanobisDistance).ToArray();
             MahalanobisPoints = Subgroups.Select(s => new ChartPointViewModel(s.Index, s.MahalanobisDistance)).ToArray();
