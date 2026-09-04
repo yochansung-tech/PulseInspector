@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>PulseInspector.Wpf</RootNamespace>
+    <AssemblyName>PulseInspector.Wpf</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PulseInspector.Application\PulseInspector.Application.csproj" />
+    <ProjectReference Include="..\PulseInspector\PulseInspector.csproj" />
+  </ItemGroup>
+</Project>
