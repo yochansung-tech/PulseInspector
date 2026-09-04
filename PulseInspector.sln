@@ -2,8 +2,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulseInspector", "PulseInspector\PulseInspector.csproj", "{D3F2A4B1-4F1A-4C76-9E67-4A9D8E6D1A10}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulseInspector.Tests", "PulseInspector.Tests\PulseInspector.Tests.csproj", "{8B8B7B21-8F14-4D1B-A5C8-7C3B2C3D7F91}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulseInspector.Application", "PulseInspector.Application\PulseInspector.Application.csproj", "{C1A8B4E7-6D22-4F35-9A41-2D0B6E8C7315}"
@@ -18,10 +16,6 @@ Global
         Release|Any CPU = Release|Any CPU
     EndGlobalSection
     GlobalSection(ProjectConfigurationPlatforms) = postSolution
-        {D3F2A4B1-4F1A-4C76-9E67-4A9D8E6D1A10}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-        {D3F2A4B1-4F1A-4C76-9E67-4A9D8E6D1A10}.Debug|Any CPU.Build.0 = Debug|Any CPU
-        {D3F2A4B1-4F1A-4C76-9E67-4A9D8E6D1A10}.Release|Any CPU.ActiveCfg = Release|Any CPU
-        {D3F2A4B1-4F1A-4C76-9E67-4A9D8E6D1A10}.Release|Any CPU.Build.0 = Release|Any CPU
         {8B8B7B21-8F14-4D1B-A5C8-7C3B2C3D7F91}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
         {8B8B7B21-8F14-4D1B-A5C8-7C3B2C3D7F91}.Debug|Any CPU.Build.0 = Debug|Any CPU
         {8B8B7B21-8F14-4D1B-A5C8-7C3B2C3D7F91}.Release|Any CPU.ActiveCfg = Release|Any CPU
