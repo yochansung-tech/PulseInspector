@@ -6,6 +6,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulseInspector", "PulseInsp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulseInspector.Tests", "PulseInspector.Tests\PulseInspector.Tests.csproj", "{8B8B7B21-8F14-4D1B-A5C8-7C3B2C3D7F91}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulseInspector.Application", "PulseInspector.Application\PulseInspector.Application.csproj", "{C1A8B4E7-6D22-4F35-9A41-2D0B6E8C7315}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulseInspector.Wpf", "PulseInspector.Wpf\PulseInspector.Wpf.csproj", "{7E9C1F42-3B5A-4D8E-A6C0-51F7B2D93418}"
+EndProject
 Global
     GlobalSection(SolutionConfigurationPlatforms) = preSolution
         Debug|Any CPU = Debug|Any CPU
@@ -20,5 +24,13 @@ Global
         {8B8B7B21-8F14-4D1B-A5C8-7C3B2C3D7F91}.Debug|Any CPU.Build.0 = Debug|Any CPU
         {8B8B7B21-8F14-4D1B-A5C8-7C3B2C3D7F91}.Release|Any CPU.ActiveCfg = Release|Any CPU
         {8B8B7B21-8F14-4D1B-A5C8-7C3B2C3D7F91}.Release|Any CPU.Build.0 = Release|Any CPU
+        {C1A8B4E7-6D22-4F35-9A41-2D0B6E8C7315}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {C1A8B4E7-6D22-4F35-9A41-2D0B6E8C7315}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {C1A8B4E7-6D22-4F35-9A41-2D0B6E8C7315}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {C1A8B4E7-6D22-4F35-9A41-2D0B6E8C7315}.Release|Any CPU.Build.0 = Release|Any CPU
+        {7E9C1F42-3B5A-4D8E-A6C0-51F7B2D93418}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {7E9C1F42-3B5A-4D8E-A6C0-51F7B2D93418}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {7E9C1F42-3B5A-4D8E-A6C0-51F7B2D93418}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {7E9C1F42-3B5A-4D8E-A6C0-51F7B2D93418}.Release|Any CPU.Build.0 = Release|Any CPU
     EndGlobalSection
 EndGlobal
