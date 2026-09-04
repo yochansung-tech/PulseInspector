@@ -6,9 +6,4 @@
     <RootNamespace>PulseInspector</RootNamespace>
     <AssemblyName>PulseInspector.Core</AssemblyName>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Include="Models\**\*.cs" />
-    <Compile Include="Services\**\*.cs" />
-  </ItemGroup>
 </Project>
