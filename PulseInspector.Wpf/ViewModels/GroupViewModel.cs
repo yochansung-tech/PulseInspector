@@ -27,6 +27,7 @@ public sealed record FeatureValueViewModel(string Name, double Value);
 public sealed record SubgroupResultViewModel(
     int Index,
     string SourceName,
+    string RecordId,
     double MahalanobisDistance,
     double Threshold,
     bool IsDefect);
