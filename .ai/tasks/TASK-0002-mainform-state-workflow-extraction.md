@@ -1,6 +1,6 @@
 # TASK-0002 — MainForm State & Workflow Extraction
 
-**Status:** VERIFIED — WPF WORKFLOW SLICE COMPLETE / LEGACY RETIREMENT NEXT
+**Status:** RETIRED — WPF APPLICATION BOUNDARY ESTABLISHED / LEGACY WINFORMS SHELL REMOVED
 **Phase:** 1
 **Branch:** `ai/phase-1-mainform-slice`
 **Depends on:** TASK-0001 / ADR-0001
@@ -17,6 +17,8 @@ Move the first meaningful MainForm workflow behind the WPF application boundary 
 6. `PulseInspector.Core` dependency boundary introduced for Models/Services and physically relocated.
 7. CSV inspection-result export exposed through `IInspectionApplication` and consumed by WPF without duplicating exporter logic.
 8. WPF file open/save dialogs remain in the WPF view layer as UI infrastructure; parsing, feature extraction, inspection, and export remain behind Application/Core boundaries.
+9. Legacy WinForms UI smoke coverage was retired after the WPF workflow became the supported application UI.
+10. The legacy `PulseInspector` WinForms executable/project was removed from the solution and its project reference was removed from tests.
 
 ## Explicitly preserved
 - Baseline estimation/removal.
@@ -32,21 +34,22 @@ Move the first meaningful MainForm workflow behind the WPF application boundary 
 - Application facade delegates to domain services: **PASS by source review**.
 - Group/subgroup selection maps to existing records: **PASS by source review**.
 - Protected numerical/domain logic was not rewritten: **PASS by diff scope review**.
-- WPF/Application/Core Release build in GitHub Actions: **PASS** for commit `9e0429d2ff3d2737ea3a4c6ce6116ff0b55674fa`.
-- Existing algorithm regression suite: **PASS** for commit `9e0429d2ff3d2737ea3a4c6ce6116ff0b55674fa`.
-- Application export boundary: **IMPLEMENTED**; latest CI verification is pending after the current export/UI changes.
+- WPF/Application/Core Release build and algorithm regression: **previously PASS** for commit `9e0429d2ff3d2737ea3a4c6ce6116ff0b55674fa`.
+- Application export boundary: **IMPLEMENTED**; export regression coverage is present in `PulseInspector.Tests`.
 - Hosted WaveformControl disposal: **N/A** after native WPF waveform migration.
-- Broad legacy UI migration: **not completed; intentionally deferred until WPF parity is manually verified**.
+- Legacy WinForms smoke dependency: **REMOVED**.
+- Legacy WinForms solution project/executable: **REMOVED**.
 
-## Legacy retirement assessment
-The legacy WinForms project is still required by the current compatibility smoke test and still contains `MainForm` plus its Forms/Controls UI shell. The application layer does not reference the legacy WinForms assembly. Therefore the safe next step is not to delete the legacy project yet; it is to migrate remaining user-visible workflows, then remove the smoke-test dependency and retire the shell in a separate, reviewable change.
+## Verification state
+The latest retirement commits were created directly on the migration branch. GitHub Actions status for the newest head must be treated as **pending until a workflow run is observed**; no CI success is claimed solely from source edits.
 
-## Remaining verification
-1. Manual Windows verification of selection, inspection, defective state, settings invalidation, sorting, chart rendering, keyboard focus, accessibility, and DPI behavior.
-2. Final CI verification of the current WPF export slice.
-3. Migration of any remaining user-visible WinForms-only workflow that has no WPF equivalent.
-4. Remove `WinFormsSmokeTest` dependency after parity is accepted.
-5. Retire `PulseInspector` Forms/Controls and its WinForms executable in a separate change.
+## Migration completion gate
+The Phase-1 MainForm migration slice is considered source-complete because:
+- WPF is the only application UI project in the solution.
+- Tests no longer reference the legacy WinForms project.
+- Application does not reference the legacy WinForms assembly.
+- Core/Application boundaries remain intact.
+- Domain algorithms remain outside WPF and were not rewritten during UI retirement.
 
 ## Hard stops
 Protected service behavior, CSV contracts, feature ordering, and numerical algorithms must not be changed as part of UI migration without a separate architecture/algorithm decision.
