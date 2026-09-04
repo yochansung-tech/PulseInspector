@@ -14,7 +14,7 @@ internal static class ThemeManager
 
     public static void Apply(AppTheme theme)
     {
-        var application = Application.Current;
+        var application = System.Windows.Application.Current;
         if (application is null) return;
 
         var dictionaries = application.Resources.MergedDictionaries;
