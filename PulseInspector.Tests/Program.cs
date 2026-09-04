@@ -1,6 +1,7 @@
 using PulseInspector.Application.Services;
 using PulseInspector.Models;
 using PulseInspector.Services;
+using PulseInspector.Wpf.ViewModels;
 
 namespace PulseInspector.Tests;
 
@@ -13,6 +14,7 @@ internal static class Program
             TestFeatureOrder(); TestGroupMeanFeatures(); TestRowBasedCsvLoading(); TestRowBasedCsvEndToEnd();
             TestFeatureExtraction(); TestTrainingValidation(); TestMahalanobisTrainingAndInspection();
             TestNormalVsDefectivePulseDetection(); TestApplicationFacade(); TestApplicationExportFacade(); TestCoreDependencyBoundary();
+            TestRelayCommandState(); TestMainWindowInitialCommandState();
             FeatureDeviationTests.Run();
             Console.WriteLine("ALL TESTS PASSED"); return 0;
         }
@@ -20,6 +22,37 @@ internal static class Program
         {
             Console.Error.WriteLine("TEST FAILURE"); Console.Error.WriteLine(ex); return 1;
         }
+    }
+
+    private static void TestRelayCommandState()
+    {
+        var allowed = false;
+        var executed = false;
+        var command = new RelayCommand(() => executed = true, () => allowed);
+        var notifications = 0;
+        command.CanExecuteChanged += (_, _) => notifications++;
+
+        Assert(!command.CanExecute(null), "RelayCommand must initially report CanExecute=false.");
+        allowed = true;
+        command.RaiseCanExecuteChanged();
+        Assert(notifications == 1, "RelayCommand did not raise CanExecuteChanged.");
+        Assert(command.CanExecute(null), "RelayCommand did not observe the updated predicate.");
+        command.Execute(null);
+        Assert(executed, "RelayCommand did not execute the action.");
+    }
+
+    private static void TestMainWindowInitialCommandState()
+    {
+        var viewModel = new MainWindowViewModel(new InspectionApplication());
+        Assert(viewModel.AddGroupCommand.CanExecute(null), "Add Group must be enabled in the initial state.");
+        Assert(viewModel.AddRowsCommand.CanExecute(null), "Add Groups by Rows must be enabled in the initial state.");
+        Assert(!viewModel.ClearGroupsCommand.CanExecute(null), "Clear must be disabled when no groups are loaded.");
+        Assert(!viewModel.TrainCommand.CanExecute(null), "Train must be disabled before enough normal groups are loaded.");
+        Assert(!viewModel.InspectCommand.CanExecute(null), "Inspect must be disabled before a selected group and training set exist.");
+        Assert(!viewModel.ExportCommand.CanExecute(null), "Export must be disabled before an inspection result exists.");
+        Assert(!viewModel.IsModelTrained, "Initial ViewModel must not expose a trained model.");
+        Assert(!viewModel.HasInspectionResult, "Initial ViewModel must not expose an inspection result.");
+        Assert(!viewModel.HasGroups, "Initial ViewModel must report an empty group state.");
     }
 
     private static void TestCoreDependencyBoundary()
