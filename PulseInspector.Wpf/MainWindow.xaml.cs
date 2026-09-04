@@ -1,22 +1,16 @@
 using System.Windows;
 using Microsoft.Win32;
-using PulseInspector.Controls;
-using PulseInspector.Wpf.Views;
 using PulseInspector.Wpf.ViewModels;
+using PulseInspector.Wpf.Views;
 
 namespace PulseInspector.Wpf;
 
 public partial class MainWindow : Window
 {
-    private readonly WaveformControl _waveformControl;
-
     public MainWindow()
     {
         InitializeComponent();
-        _waveformControl = new WaveformControl();
-        WaveformHost.Child = _waveformControl;
         Loaded += OnLoaded;
-        Closed += OnClosed;
     }
 
     private MainWindowViewModel? ViewModel => DataContext as MainWindowViewModel;
@@ -44,23 +38,14 @@ public partial class MainWindow : Window
     {
         if (ViewModel is null) return;
         var window = new SettingsWindow(ViewModel.DecisionPolicy, ViewModel.Confidence, ViewModel.SampleIntervalSeconds) { Owner = this };
-        if (window.ShowDialog() == true)
-        {
-            try { ViewModel.ApplySettings(window.Policy, window.Confidence, window.SampleIntervalSeconds); }
-            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Invalid settings", MessageBoxButton.OK, MessageBoxImage.Warning); }
-        }
+        if (window.ShowDialog() == true) ViewModel.ApplySettings(window.Policy, window.Confidence, window.SampleIntervalSeconds);
     }
 
-    private void OnWaveformChanged(object? sender, EventArgs e)
-    {
-        var samples = ViewModel?.Waveform;
-        if (samples is { Count: > 0 }) _waveformControl.SetData(samples.ToArray());
-    }
+    private void OnWaveformChanged(object? sender, EventArgs e) => WaveformView.SetData(ViewModel?.Waveform);
 
-    private void OnClosed(object? sender, EventArgs e)
+    protected override void OnClosed(EventArgs e)
     {
         if (ViewModel is not null) ViewModel.WaveformChanged -= OnWaveformChanged;
-        WaveformHost.Child = null;
-        _waveformControl.Dispose();
+        base.OnClosed(e);
     }
 }
