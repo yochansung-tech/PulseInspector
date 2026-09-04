@@ -1,6 +1,6 @@
 # TASK-0003 — Core Boundary Extraction
 
-**Status:** IN PROGRESS
+**Status:** VERIFIED — PHYSICAL EXTRACTION COMPLETE
 **Phase:** 1
 **Branch:** `ai/phase-1-mainform-slice`
 **Depends on:** TASK-0002 / ADR-0001
@@ -13,11 +13,14 @@ Establish a UI-independent `PulseInspector.Core` assembly containing the protect
 2. Moved the project dependency direction for Application from the legacy WinForms assembly to Core.
 3. Updated the legacy WinForms shell to reference Core rather than compiling duplicate Models/Services.
 4. Updated the test project to reference Core explicitly.
-5. Confirmed the current Core assembly has no reference to Windows Forms by project configuration.
-6. Confirmed Release build and algorithm regression suite pass in GitHub Actions.
+5. Confirmed the Core project contains no Windows Forms project dependency.
+6. Physically relocated Models and Services under `PulseInspector.Core/Models` and `PulseInspector.Core/Services`.
+7. Removed linked compilation from `PulseInspector.Core.csproj`.
+8. Removed the legacy `PulseInspector/Models` and `PulseInspector/Services` source copies.
+9. Confirmed Release build and algorithm regression suite pass before the physical extraction; final post-extraction CI verification is required.
 
-## Transitional implementation
-Core currently uses linked compilation of the existing `PulseInspector/Models` and `PulseInspector/Services` source files. This deliberately avoids duplicating protected numerical code while the legacy UI is retired.
+## Physical extraction result
+The Core project now owns the source of truth for Models/Services. Namespaces remain `PulseInspector.Models` and `PulseInspector.Services` to minimize migration churn and preserve existing callers. The legacy WinForms project remains a UI compatibility shell and references Core.
 
 ## Protected behavior
 No algorithm rewrite is permitted in this task:
@@ -29,12 +32,14 @@ No algorithm rewrite is permitted in this task:
 - chi-square threshold
 - CSV parsing/compatibility
 
-## Next work
-1. Relocate Models/Services physically under `PulseInspector.Core`.
-2. Remove linked compilation and delete the legacy source copies only after all references are migrated.
-3. Add an automated dependency-boundary check.
-4. Verify WPF/Application runtime path contains no WinForms assembly dependency.
-5. Retire legacy Forms/Controls after WPF parity and manual Windows verification.
+## Dependency boundary
+The automated test suite checks that `FeatureVector` is loaded from `PulseInspector.Core`, that Application references Core, and that Application does not reference the legacy WinForms assembly. The Core project itself targets plain `net8.0` and contains only Models/Services sources.
+
+## Remaining work
+1. Run and verify post-extraction CI.
+2. Perform manual Windows verification of the WPF executable and migrated workflows.
+3. Continue retiring the legacy WinForms Forms/Controls compatibility shell after WPF parity is complete.
+4. Migrate remaining UI-only infrastructure and export/selection workflows into WPF/Application where required.
 
 ## Acceptance criteria
 - Core builds as `net8.0` without Windows desktop UI references.
