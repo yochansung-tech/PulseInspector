@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PulseInspector\PulseInspector.csproj" />
+    <ProjectReference Include="..\PulseInspector.Application\PulseInspector.Application.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="TestData\**\*.csv" CopyToOutputDirectory="PreserveNewest" />
