@@ -7,11 +7,12 @@
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <DockPanel Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                <Button Content="Add Group..." Click="AddGroup_Click" AutomationProperties.Name="Add waveform group"/>
-                <Button Content="Add Groups by Rows..." Click="AddRows_Click" AutomationProperties.Name="Add groups from row CSV"/>
+                <Button Content="Add Group..." Command="{Binding AddGroupCommand}" AutomationProperties.Name="Add waveform group"/>
+                <Button Content="Add Groups by Rows..." Command="{Binding AddRowsCommand}" AutomationProperties.Name="Add groups from row CSV"/>
                 <Button Content="Training" Click="Training_Click" AutomationProperties.Name="Open training validation"/>
                 <Button Content="Train" Command="{Binding TrainCommand}" AutomationProperties.Name="Train model"/>
                 <Button Content="Inspect" Command="{Binding InspectCommand}" AutomationProperties.Name="Inspect selected group"/>
+                <Button Content="Export CSV..." Command="{Binding ExportCommand}" AutomationProperties.Name="Export inspection result to CSV"/>
                 <Button Content="Settings" Click="Settings_Click" AutomationProperties.Name="Open settings"/>
                 <Button Content="About" Click="About_Click" AutomationProperties.Name="About PulseInspector"/>
                 <Button Content="Clear" Command="{Binding ClearGroupsCommand}" AutomationProperties.Name="Clear groups"/>
