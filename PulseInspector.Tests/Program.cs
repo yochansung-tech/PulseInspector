@@ -1,3 +1,4 @@
+using PulseInspector.Application.Services;
 using PulseInspector.Models;
 using PulseInspector.Services;
 
@@ -17,6 +18,7 @@ internal static class Program
             TestTrainingValidation();
             TestMahalanobisTrainingAndInspection();
             TestNormalVsDefectivePulseDetection();
+            TestApplicationFacade();
             FeatureDeviationTests.Run();
             WinFormsSmokeTest.Run();
             Console.WriteLine("ALL TESTS PASSED");
@@ -28,6 +30,22 @@ internal static class Program
             Console.Error.WriteLine(ex);
             return 1;
         }
+    }
+
+    private static void TestApplicationFacade()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"pulseinspector-app-{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(path, "0,1,2,1,0\n");
+            var application = new InspectionApplication();
+            var group = application.LoadGroup(new[] { path }, 1e-6);
+            Assert(group.RecordCount == 1, "Application facade did not load one waveform.");
+            Assert(group.Records[0].Features["Peak"] > 0, "Application facade did not extract features.");
+            var validation = application.ValidateTraining(new[] { group });
+            Assert(!validation.IsValid, "A single group should not pass covariance training validation.");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
     }
 
     private static void TestFeatureOrder()
@@ -80,11 +98,7 @@ internal static class Program
             for (var index = 0; index < rows.Count; index++)
             {
                 var row = rows[index];
-                group.AddWaveform(
-                    row.Samples,
-                    CreateFeatures(row.Samples.Max()),
-                    $"row-{index + 1}",
-                    row.SampleIntervalSeconds);
+                group.AddWaveform(row.Samples, CreateFeatures(row.Samples.Max()), $"row-{index + 1}", row.SampleIntervalSeconds);
             }
             Assert(group.RecordCount == 2, "End-to-end GroupData record count is incorrect.");
         }
@@ -96,7 +110,6 @@ internal static class Program
         var extractor = new FeatureExtractor();
         var waveform = new[] { 0d, 1d, 3d, 6d, 3d, 1d, 0d };
         var features = extractor.Extract(waveform, 1e-6);
-
         foreach (var name in FeatureVector.StatisticalFeatureNames)
             Assert(double.IsFinite(features[name]), $"Feature '{name}' is not finite.");
         Assert(features["Peak"] > 0, "Peak extraction failed.");
@@ -105,56 +118,36 @@ internal static class Program
 
     private static void TestTrainingValidation()
     {
-        var vectors = Enumerable.Range(0, 7)
-            .Select(i => CreateTrainingFeatures(i))
-            .ToArray();
-
+        var vectors = Enumerable.Range(0, 7).Select(i => CreateTrainingFeatures(i)).ToArray();
         var service = new InspectionService();
         var validation = service.ValidateTraining(vectors);
-        Assert(!validation.Issues.Any(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)),
-            "Valid training vectors were rejected by validation.");
+        Assert(!validation.Issues.Any(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)), "Valid training vectors were rejected by validation.");
     }
 
     private static void TestMahalanobisTrainingAndInspection()
     {
-        var vectors = Enumerable.Range(0, 10)
-            .Select(i => CreateTrainingFeatures(i))
-            .ToArray();
-
+        var vectors = Enumerable.Range(0, 10).Select(i => CreateTrainingFeatures(i)).ToArray();
         var service = new InspectionService();
         var model = service.Train(vectors, 0.999);
-
         Assert(model.Mean.Length == FeatureVector.StatisticalFeatureCount, "Model feature dimension is incorrect.");
         Assert(model.InverseCovariance.GetLength(0) == FeatureVector.StatisticalFeatureCount, "Inverse covariance dimension is incorrect.");
         Assert(model.InverseCovariance.GetLength(1) == FeatureVector.StatisticalFeatureCount, "Inverse covariance dimension is incorrect.");
         Assert(model.Threshold > 0, "Mahalanobis threshold is invalid.");
-
-        var normal = CreateTrainingFeatures(5);
-        var result = service.Inspect(normal, model);
+        var result = service.Inspect(CreateTrainingFeatures(5), model);
         Assert(double.IsFinite(result.MahalanobisDistance), "Normal Mahalanobis distance is not finite.");
         Assert(result.MahalanobisDistance < model.Threshold, "Training-like sample was classified as defect.");
     }
 
     private static void TestNormalVsDefectivePulseDetection()
     {
-        var training = Enumerable.Range(0, 12)
-            .Select(i => CreateTrainingFeatures(i))
-            .ToArray();
-
+        var training = Enumerable.Range(0, 12).Select(i => CreateTrainingFeatures(i)).ToArray();
         var service = new InspectionService();
         var model = service.Train(training, 0.99);
-
         var normal = CreateTrainingFeatures(6);
         var defect = CreateTrainingFeatures(100);
-        defect["Peak"] *= 8;
-        defect["Charge"] *= 8;
-        defect["Noise"] *= 5;
-
-        var normalResult = service.Inspect(normal, model);
-        var defectResult = service.Inspect(defect, model);
-
-        Assert(!normalResult.IsDefect, "Normal synthetic sample was classified as defect.");
-        Assert(defectResult.IsDefect, "Strong synthetic defect was not detected.");
+        defect["Peak"] *= 8; defect["Charge"] *= 8; defect["Noise"] *= 5;
+        Assert(!service.Inspect(normal, model).IsDefect, "Normal synthetic sample was classified as defect.");
+        Assert(service.Inspect(defect, model).IsDefect, "Strong synthetic defect was not detected.");
     }
 
     private static FeatureVector CreateTrainingFeatures(int index)
@@ -173,8 +166,7 @@ internal static class Program
     private static FeatureVector CreateFeatures(double value)
     {
         var f = new FeatureVector();
-        foreach (var name in FeatureVector.StatisticalFeatureNames)
-            f[name] = value;
+        foreach (var name in FeatureVector.StatisticalFeatureNames) f[name] = value;
         f["ZScore"] = value;
         return f;
     }
