@@ -1,0 +1,20 @@
+<Window x:Class="PulseInspector.Wpf.Views.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About PulseInspector" Width="480" Height="330" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="28">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <TextBlock Text="PulseInspector" FontSize="30" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="1" Text="WPF Migration / Release 1.0" Margin="0,6,0,18" Foreground="{DynamicResource MutedTextBrush}"/>
+        <StackPanel Grid.Row="2">
+            <TextBlock Text="Signal inspection and subgroup anomaly analysis" FontSize="15" Margin="0,0,0,12"/>
+            <TextBlock Text="• .NET 8 WPF / MVVM presentation" Margin="0,3"/>
+            <TextBlock Text="• Deterministic feature ordering" Margin="0,3"/>
+            <TextBlock Text="• Mahalanobis distance and chi-square threshold" Margin="0,3"/>
+            <TextBlock Text="• Group and subgroup inspection workflow" Margin="0,3"/>
+            <TextBlock Text="• CSV-compatible waveform import" Margin="0,3"/>
+        </StackPanel>
+        <Button Grid.Row="3" Content="Close" Width="90" HorizontalAlignment="Right" IsDefault="True" IsCancel="True" Click="Close_Click"/>
+    </Grid>
+</Window>

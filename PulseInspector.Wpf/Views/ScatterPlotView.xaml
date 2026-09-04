@@ -1,0 +1,11 @@
+<UserControl x:Class="PulseInspector.Wpf.Views.ScatterPlotView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Padding="10" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Grid>
+            <Canvas x:Name="PlotCanvas" Background="Transparent"/>
+            <TextBlock Text="Subgroup Mahalanobis distance" VerticalAlignment="Top" FontWeight="SemiBold"/>
+            <TextBlock x:Name="EmptyText" Text="No subgroup inspection result" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}"/>
+        </Grid>
+    </Border>
+</UserControl>
