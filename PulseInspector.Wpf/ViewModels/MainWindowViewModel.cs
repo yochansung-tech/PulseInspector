@@ -17,6 +17,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private double _confidence = 0.999;
     private double _sampleIntervalSeconds = 2.56e-6 / 64.0;
     private IReadOnlyList<double> _waveform = Array.Empty<double>();
+    private IReadOnlyList<double> _mahalanobisValues = Array.Empty<double>();
+    private IReadOnlyList<ChartPointViewModel> _mahalanobisPoints = Array.Empty<ChartPointViewModel>();
     private GroupDecisionPolicy _decisionPolicy = new();
 
     public MainWindowViewModel(IInspectionApplication application)
@@ -25,7 +27,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         AddGroupCommand = new RelayCommand(AddGroupPlaceholder);
         AddRowsCommand = new RelayCommand(AddRowsPlaceholder);
         ClearGroupsCommand = new RelayCommand(ClearGroups, () => Groups.Count > 0);
-        TrainCommand = new RelayCommand(Train, () => NormalGroupCount >= RequiredTrainingGroups);
+        TrainCommand = new RelayCommand(TrainModel, () => NormalGroupCount >= RequiredTrainingGroups);
         InspectCommand = new RelayCommand(Inspect, () => SelectedGroup is not null && NormalGroupCountExcludingSelection >= RequiredTrainingGroups);
     }
 
@@ -44,8 +46,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public SubgroupResultViewModel? SelectedSubgroup { get => _selectedSubgroup; set { if (ReferenceEquals(_selectedSubgroup, value)) return; _selectedSubgroup = value; OnPropertyChanged(); ShowSelectedSubgroup(); } }
     public bool SelectedGroupIsDefective { get => SelectedGroup?.IsDefective ?? false; set => SetSelectedGroupDefective(value); }
     public IReadOnlyList<double> Waveform { get => _waveform; private set { _waveform = value; OnPropertyChanged(); WaveformChanged?.Invoke(this, EventArgs.Empty); } }
+    public IReadOnlyList<double> MahalanobisValues { get => _mahalanobisValues; private set { _mahalanobisValues = value; OnPropertyChanged(); } }
+    public IReadOnlyList<ChartPointViewModel> MahalanobisPoints { get => _mahalanobisPoints; private set { _mahalanobisPoints = value; OnPropertyChanged(); } }
     public string StatusText { get => _statusText; private set { if (_statusText == value) return; _statusText = value; OnPropertyChanged(); } }
     public int NormalGroupCount => _groupModels.Count(g => !g.IsDefective);
+    public int RequiredTrainingGroupCount => RequiredTrainingGroups;
     public double Confidence { get => _confidence; set { if (_confidence == value) return; _confidence = value; OnPropertyChanged(); } }
     public double SampleIntervalSeconds { get => _sampleIntervalSeconds; set { if (_sampleIntervalSeconds == value) return; _sampleIntervalSeconds = value; OnPropertyChanged(); } }
     public GroupDecisionPolicy DecisionPolicy => _decisionPolicy;
@@ -66,12 +71,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         catch (Exception ex) { SetStatus($"Row CSV load failed: {ex.Message}"); }
     }
 
+    public TrainingValidationResult ValidateTraining()
+    {
+        var normal = _groupModels.Where(g => !g.IsDefective).ToArray();
+        return _application.ValidateTraining(normal);
+    }
+
     public void ApplySettings(GroupDecisionPolicy policy, double confidence, double sampleIntervalSeconds)
     {
         policy.Validate();
         if (!double.IsFinite(confidence) || confidence <= 0 || confidence >= 1) throw new ArgumentOutOfRangeException(nameof(confidence));
         if (!double.IsFinite(sampleIntervalSeconds) || sampleIntervalSeconds <= 0) throw new ArgumentOutOfRangeException(nameof(sampleIntervalSeconds));
-        _decisionPolicy = policy; Confidence = confidence; SampleIntervalSeconds = sampleIntervalSeconds; _model = null; Subgroups.Clear(); Deviations.Clear();
+        _decisionPolicy = policy; Confidence = confidence; SampleIntervalSeconds = sampleIntervalSeconds; _model = null; ClearInspectionResults();
         SetStatus($"Settings applied: rule={policy.Rule}, confidence={confidence:G6}, dt={sampleIntervalSeconds:E3}s"); RaiseCommandStates();
     }
 
@@ -81,13 +92,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void ClearGroups()
     {
-        _groupModels.Clear(); Groups.Clear(); Features.Clear(); Deviations.Clear(); Subgroups.Clear(); _model = null; _selectedGroup = null; _selectedSubgroup = null; Waveform = Array.Empty<double>();
-        OnPropertyChanged(nameof(SelectedGroup)); OnPropertyChanged(nameof(SelectedSubgroup)); OnPropertyChanged(nameof(SelectedGroupIsDefective)); SetStatus("Groups cleared"); RaiseCommandStates();
+        _groupModels.Clear(); Groups.Clear(); Features.Clear(); ClearInspectionResults(); _selectedGroup = null; _selectedSubgroup = null; Waveform = Array.Empty<double>();
+        OnPropertyChanged(nameof(SelectedGroup)); OnPropertyChanged(nameof(SelectedSubgroup)); OnPropertyChanged(nameof(SelectedGroupIsDefective)); OnPropertyChanged(nameof(NormalGroupCount)); SetStatus("Groups cleared"); RaiseCommandStates();
     }
 
     private void ShowSelectedGroup()
     {
-        Features.Clear(); Deviations.Clear(); Subgroups.Clear(); _selectedSubgroup = null; OnPropertyChanged(nameof(SelectedSubgroup)); _model = null;
+        Features.Clear(); ClearInspectionResults(); _selectedSubgroup = null; OnPropertyChanged(nameof(SelectedSubgroup)); _model = null;
         if (SelectedGroup is null) { Waveform = Array.Empty<double>(); return; }
         var group = SelectedGroup.Model; Waveform = group.MeanWaveform() ?? Array.Empty<double>(); var features = group.MeanFeatures(); if (features is not null) SetFeatures(features); SetStatus($"Selected Group {ShortId(group)}: {group.RecordCount} waveform(s)");
     }
@@ -99,9 +110,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var record = SelectedGroup.Model.Records[recordIndex]; Waveform = record.Samples; SetFeatures(record.Features); SetStatus($"Selected subgroup #{SelectedSubgroup.Index}: {SelectedSubgroup.SourceName}");
     }
 
-    private void Train()
+    public void TrainModel()
     {
-        try { var normal = _groupModels.Where(g => !g.IsDefective).ToArray(); _model = _application.Train(normal, Confidence); SetStatus($"Model trained: {normal.Length} normal groups, threshold={_model.Threshold:F6}"); }
+        try { var normal = _groupModels.Where(g => !g.IsDefective).ToArray(); var validation = _application.ValidateTraining(normal); if (!validation.IsValid) { SetStatus($"Training validation failed: {validation.Issues.First(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)).Message}"); return; } _model = _application.Train(normal, Confidence); SetStatus($"Model trained: {normal.Length} normal groups, threshold={_model.Threshold:F6}"); }
         catch (Exception ex) { _model = null; SetStatus($"Training failed: {ex.Message}"); }
     }
 
@@ -111,6 +122,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         try
         {
             var training = _groupModels.Where(g => !g.IsDefective && !ReferenceEquals(g, SelectedGroup.Model)).ToArray();
+            var validation = _application.ValidateTraining(training);
+            if (!validation.IsValid) { SetStatus($"Inspection training validation failed: {validation.Issues.First(i => i.Code.StartsWith("ERROR_", StringComparison.Ordinal)).Message}"); return; }
             _model = _application.Train(training, Confidence);
             var result = _application.Inspect(SelectedGroup.Model, _model, _decisionPolicy);
             SetFeatures(result.Features);
@@ -118,6 +131,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             foreach (var d in _application.AnalyzeDeviations(result.Features, _model)) Deviations.Add(new FeatureDeviationViewModel(d.FeatureName, d.Value, d.Mean, d.StandardDeviation, d.ZScore, d.AbsoluteZScore, d.MahalanobisContribution));
             Subgroups.Clear();
             foreach (var row in _application.InspectSubgroups(SelectedGroup.Model, _model)) Subgroups.Add(new SubgroupResultViewModel(row.Index, row.SourceName, row.MahalanobisDistance, row.Threshold, row.IsDefect));
+            MahalanobisValues = Subgroups.Select(s => s.MahalanobisDistance).ToArray();
+            MahalanobisPoints = Subgroups.Select(s => new ChartPointViewModel(s.Index, s.MahalanobisDistance)).ToArray();
             SetStatus($"Group {ShortId(SelectedGroup.Model)}: {(result.IsDefect ? "DEFECT" : "NORMAL")} | MD={result.MahalanobisDistance:F6} | Threshold={result.Threshold:F6}");
         }
         catch (Exception ex) { _model = null; SetStatus($"Inspection failed: {ex.Message}"); }
@@ -125,6 +140,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public void SetSelectedGroupDefective(bool value) { if (SelectedGroup is null) return; SelectedGroup.IsDefective = value; OnPropertyChanged(nameof(SelectedGroupIsDefective)); OnPropertyChanged(nameof(NormalGroupCount)); RaiseCommandStates(); }
     private void SetFeatures(FeatureVector vector) { Features.Clear(); foreach (var name in FeatureVector.FeatureNames) Features.Add(new FeatureValueViewModel(name, vector[name])); }
+    private void ClearInspectionResults() { Deviations.Clear(); Subgroups.Clear(); MahalanobisValues = Array.Empty<double>(); MahalanobisPoints = Array.Empty<ChartPointViewModel>(); }
     public void SetStatus(string message) => StatusText = message ?? string.Empty;
     private static string ShortId(GroupData group) => group.Id[..Math.Min(8, group.Id.Length)];
     private void RaiseCommandStates() { ClearGroupsCommand.RaiseCanExecuteChanged(); TrainCommand.RaiseCanExecuteChanged(); InspectCommand.RaiseCanExecuteChanged(); }
