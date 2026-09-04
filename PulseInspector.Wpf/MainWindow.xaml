@@ -7,41 +7,51 @@
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <DockPanel Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                <Button Content="Add Group..." Click="AddGroup_Click" Padding="14,7" Margin="6,0,0,0"/>
-                <Button Content="Add Groups by Rows..." Click="AddRows_Click" Padding="14,7" Margin="6,0,0,0"/>
-                <Button Content="Train" Command="{Binding TrainCommand}" Padding="14,7" Margin="6,0,0,0"/>
-                <Button Content="Inspect" Command="{Binding InspectCommand}" Padding="14,7" Margin="6,0,0,0"/>
-                <Button Content="Settings" Click="Settings_Click" Padding="14,7" Margin="6,0,0,0"/>
-                <Button Content="Clear" Command="{Binding ClearGroupsCommand}" Padding="14,7" Margin="6,0,0,0"/>
+                <Button Content="Add Group..." Click="AddGroup_Click" AutomationProperties.Name="Add waveform group"/>
+                <Button Content="Add Groups by Rows..." Click="AddRows_Click" AutomationProperties.Name="Add groups from row CSV"/>
+                <Button Content="Training" Click="Training_Click" AutomationProperties.Name="Open training validation"/>
+                <Button Content="Train" Command="{Binding TrainCommand}" AutomationProperties.Name="Train model"/>
+                <Button Content="Inspect" Command="{Binding InspectCommand}" AutomationProperties.Name="Inspect selected group"/>
+                <Button Content="Settings" Click="Settings_Click" AutomationProperties.Name="Open settings"/>
+                <Button Content="About" Click="About_Click" AutomationProperties.Name="About PulseInspector"/>
+                <Button Content="Clear" Command="{Binding ClearGroupsCommand}" AutomationProperties.Name="Clear groups"/>
             </StackPanel>
             <TextBlock Text="PulseInspector" FontSize="24" FontWeight="SemiBold" VerticalAlignment="Center"/>
         </DockPanel>
         <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="290"/><ColumnDefinition Width="*"/><ColumnDefinition Width="360"/></Grid.ColumnDefinitions>
-            <Border Grid.Column="0" BorderBrush="#D8D8D8" BorderThickness="1" Padding="8" Margin="0,0,10,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="290"/><ColumnDefinition Width="*"/><ColumnDefinition Width="380"/></Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,10,0">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Groups" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                    <CheckBox DockPanel.Dock="Bottom" Content="Selected group is defective" IsChecked="{Binding SelectedGroupIsDefective, Mode=TwoWay}" Margin="0,8,0,0"/>
-                    <ListBox ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup, Mode=TwoWay}" DisplayMemberPath="DisplayName"/>
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="Groups" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <TextBlock Text="Normal groups: {Binding NormalGroupCount}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,8"/>
+                    </StackPanel>
+                    <CheckBox DockPanel.Dock="Bottom" Content="Selected group is defective" IsChecked="{Binding SelectedGroupIsDefective, Mode=TwoWay}" Margin="0,8,0,0" AutomationProperties.Name="Selected group is defective"/>
+                    <ListBox ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup, Mode=TwoWay}" DisplayMemberPath="DisplayName" AutomationProperties.Name="Groups"/>
                 </DockPanel>
             </Border>
             <Grid Grid.Column="1" Margin="0,0,10,0">
-                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="250"/></Grid.RowDefinitions>
-                <Border Grid.Row="0" BorderBrush="#D8D8D8" BorderThickness="1"><views:WaveformView x:Name="WaveformView"/></Border>
-                <DataGrid Grid.Row="1" ItemsSource="{Binding Subgroups}" SelectedItem="{Binding SelectedSubgroup, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" Margin="0,10,0,0">
-                    <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding Index}" Width="50"/><DataGridTextColumn Header="Source" Binding="{Binding SourceName}" Width="*"/><DataGridTextColumn Header="Mahalanobis" Binding="{Binding MahalanobisDistance, StringFormat=F6}" Width="120"/><DataGridTextColumn Header="Threshold" Binding="{Binding Threshold, StringFormat=F6}" Width="110"/><DataGridCheckBoxColumn Header="Defect" Binding="{Binding IsDefect}" Width="70"/></DataGrid.Columns>
+                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="230"/><RowDefinition Height="180"/></Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"><views:WaveformView x:Name="WaveformView"/></Border>
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Subgroups}" SelectedItem="{Binding SelectedSubgroup, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" Margin="0,10,0,0" Sorting="Subgroups_Sorting" AutomationProperties.Name="Subgroup inspection results">
+                    <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding Index}" SortMemberPath="Index" Width="50"/><DataGridTextColumn Header="Source" Binding="{Binding SourceName}" SortMemberPath="SourceName" Width="*"/><DataGridTextColumn Header="Mahalanobis" Binding="{Binding MahalanobisDistance, StringFormat=F6}" SortMemberPath="MahalanobisDistance" Width="120"/><DataGridTextColumn Header="Threshold" Binding="{Binding Threshold, StringFormat=F6}" SortMemberPath="Threshold" Width="110"/><DataGridCheckBoxColumn Header="Defect" Binding="{Binding IsDefect}" SortMemberPath="IsDefect" Width="70"/></DataGrid.Columns>
                 </DataGrid>
+                <Grid Grid.Row="2" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <views:HistogramView Grid.Column="0" Values="{Binding MahalanobisValues}" Margin="0,0,5,0"/>
+                    <views:ScatterPlotView Grid.Column="1" Points="{Binding MahalanobisPoints}" Margin="5,0,0,0"/>
+                </Grid>
             </Grid>
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <DataGrid Grid.Row="0" ItemsSource="{Binding Features}" AutoGenerateColumns="False" IsReadOnly="True" Margin="0,0,0,6">
+                <DataGrid Grid.Row="0" ItemsSource="{Binding Features}" AutoGenerateColumns="False" IsReadOnly="True" Margin="0,0,0,6" AutomationProperties.Name="Feature values">
                     <DataGrid.Columns><DataGridTextColumn Header="Feature" Binding="{Binding Name}" Width="*"/><DataGridTextColumn Header="Value" Binding="{Binding Value, StringFormat=G8}" Width="130"/></DataGrid.Columns>
                 </DataGrid>
-                <DataGrid Grid.Row="1" ItemsSource="{Binding Deviations}" AutoGenerateColumns="False" IsReadOnly="True" Margin="0,6,0,0">
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Deviations}" AutoGenerateColumns="False" IsReadOnly="True" Margin="0,6,0,0" AutomationProperties.Name="Feature deviations">
                     <DataGrid.Columns><DataGridTextColumn Header="Feature" Binding="{Binding FeatureName}" Width="*"/><DataGridTextColumn Header="Z" Binding="{Binding ZScore, StringFormat=F3}" Width="65"/><DataGridTextColumn Header="|Z|" Binding="{Binding AbsoluteZScore, StringFormat=F3}" Width="65"/><DataGridTextColumn Header="Contribution" Binding="{Binding Contribution, StringFormat=F3}" Width="105"/></DataGrid.Columns>
                 </DataGrid>
             </Grid>
         </Grid>
-        <TextBlock Grid.Row="2" Margin="0,12,0,0" Foreground="#606060" Text="{Binding StatusText}"/>
+        <TextBlock Grid.Row="2" Margin="0,12,0,0" Foreground="{DynamicResource MutedTextBrush}" Text="{Binding StatusText}" AutomationProperties.Name="Application status"/>
     </Grid>
 </Window>
