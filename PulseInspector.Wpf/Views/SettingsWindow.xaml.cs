@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using PulseInspector.Models;
+using PulseInspector.Wpf;
 
 namespace PulseInspector.Wpf.Views;
 
