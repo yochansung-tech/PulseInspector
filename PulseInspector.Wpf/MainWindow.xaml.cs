@@ -1,6 +1,7 @@
 using System.Windows;
 using Microsoft.Win32;
 using PulseInspector.Controls;
+using PulseInspector.Wpf.Views;
 using PulseInspector.Wpf.ViewModels;
 
 namespace PulseInspector.Wpf;
@@ -12,7 +13,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-
         _waveformControl = new WaveformControl();
         WaveformHost.Child = _waveformControl;
         Loaded += OnLoaded;
@@ -30,31 +30,36 @@ public partial class MainWindow : Window
 
     private void AddGroup_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog
-        {
-            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
-            Multiselect = true,
-            Title = "Select waveforms belonging to one group"
-        };
-        if (dialog.ShowDialog(this) != true) return;
-        ViewModel?.AddGroup(dialog.FileNames);
+        var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*", Multiselect = true, Title = "Select waveforms belonging to one group" };
+        if (dialog.ShowDialog(this) == true) ViewModel?.AddGroup(dialog.FileNames);
     }
 
-    private void Defective_Checked(object sender, RoutedEventArgs e) => ViewModel?.SetSelectedGroupDefective(true);
+    private void AddRows_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*", Multiselect = true, Title = "Select CSV files (one row = one subgroup)" };
+        if (dialog.ShowDialog(this) == true) ViewModel?.AddGroupsFromRows(dialog.FileNames);
+    }
 
-    private void Defective_Unchecked(object sender, RoutedEventArgs e) => ViewModel?.SetSelectedGroupDefective(false);
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is null) return;
+        var window = new SettingsWindow(ViewModel.DecisionPolicy, ViewModel.Confidence, ViewModel.SampleIntervalSeconds) { Owner = this };
+        if (window.ShowDialog() == true)
+        {
+            try { ViewModel.ApplySettings(window.Policy, window.Confidence, window.SampleIntervalSeconds); }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Invalid settings", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        }
+    }
 
     private void OnWaveformChanged(object? sender, EventArgs e)
     {
         var samples = ViewModel?.Waveform;
-        if (samples is null || samples.Count == 0) return;
-        _waveformControl.SetData(samples.ToArray());
+        if (samples is { Count: > 0 }) _waveformControl.SetData(samples.ToArray());
     }
 
     private void OnClosed(object? sender, EventArgs e)
     {
-        if (ViewModel is not null)
-            ViewModel.WaveformChanged -= OnWaveformChanged;
+        if (ViewModel is not null) ViewModel.WaveformChanged -= OnWaveformChanged;
         WaveformHost.Child = null;
         _waveformControl.Dispose();
     }
