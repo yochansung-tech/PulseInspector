@@ -1,24 +1,27 @@
 <Window x:Class="PulseInspector.Wpf.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Settings" Width="520" Height="320" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
-    <Grid Margin="20">
+        Title="Settings" Width="560" Height="390" MinWidth="560" MinHeight="390" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+    <Grid Margin="24">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <TextBlock Text="Group decision rule" VerticalAlignment="Center" Margin="0,0,12,10"/>
-        <ComboBox x:Name="RuleBox" Grid.Column="1" Margin="0,0,0,10"/>
-        <TextBlock Grid.Row="1" Text="Defect rate threshold" VerticalAlignment="Center" Margin="0,0,12,10"/>
-        <TextBox x:Name="RateBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,10"/>
-        <TextBlock Grid.Row="2" Text="Training confidence" VerticalAlignment="Center" Margin="0,0,12,10"/>
-        <TextBox x:Name="ConfidenceBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,10"/>
-        <TextBlock Grid.Row="3" Text="Sample interval (s)" VerticalAlignment="Center" Margin="0,0,12,10"/>
-        <TextBox x:Name="IntervalBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,10"/>
-        <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Text="Defect rate is used only by the selected rate rule." Opacity="0.7" Margin="0,4,0,12"/>
-        <StackPanel Grid.Row="5" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Cancel" Width="90" IsCancel="True" Margin="0,0,8,0"/>
-            <Button Content="Apply" Width="90" IsDefault="True" Click="Apply_Click"/>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="205"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <TextBlock Text="Appearance" Style="{StaticResource SectionTitleTextStyle}" Grid.ColumnSpan="2" Margin="0,0,0,14"/>
+        <TextBlock Grid.Row="1" Text="Theme" VerticalAlignment="Center" Margin="0,0,12,10"/>
+        <ComboBox x:Name="ThemeBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,10" AutomationProperties.Name="Application theme"/>
+        <TextBlock Grid.Row="2" Text="Group decision rule" VerticalAlignment="Center" Margin="0,0,12,10"/>
+        <ComboBox x:Name="RuleBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,10"/>
+        <TextBlock Grid.Row="3" Text="Defect rate threshold" VerticalAlignment="Center" Margin="0,0,12,10"/>
+        <TextBox x:Name="RateBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,10"/>
+        <TextBlock Grid.Row="4" Text="Training confidence" VerticalAlignment="Center" Margin="0,0,12,10"/>
+        <TextBox x:Name="ConfidenceBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,10"/>
+        <TextBlock Grid.Row="5" Grid.Column="1" Text="Sample interval is configured below the statistical settings in the application workflow." Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,4,0,12"/>
+        <TextBlock Grid.Row="6" Text="Sample interval (s)" VerticalAlignment="Center" Margin="0,0,12,10"/>
+        <TextBox x:Name="IntervalBox" Grid.Row="6" Grid.Column="1" Margin="0,0,0,10"/>
+        <StackPanel Grid.Row="7" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Cancel" Width="96" IsCancel="True" Margin="0,0,8,0" AutomationProperties.Name="Cancel settings"/>
+            <Button Content="Apply" Width="96" IsDefault="True" Click="Apply_Click" Style="{StaticResource PrimaryActionButtonStyle}" AutomationProperties.Name="Apply settings"/>
         </StackPanel>
     </Grid>
 </Window>
