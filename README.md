@@ -2,7 +2,7 @@
 
 PulseInspector is a .NET 8 desktop application for pulse waveform inspection, feature extraction, statistical training, and group-level anomaly detection.
 
-The repository currently contains the original Designer-free WinForms application plus an incremental native WPF/MVVM migration. The WPF migration is being completed without changing the protected signal-processing and statistical behavior.
+The repository now uses a native WPF/MVVM application shell with reusable Core/Application layers. The migration is being completed without changing the protected signal-processing and statistical behavior.
 
 ## Requirements
 
@@ -19,39 +19,37 @@ The repository currently contains the original Designer-free WinForms applicatio
 - Group and row-based CSV import
 - Group/subgroup selection and inspection
 - Training validation and settings
-- Native waveform rendering
+- Native WPF waveform rendering
 - Feature/deviation tables
 - Subgroup Mahalanobis histogram and scatter views
-- Deterministic subgroup sorting
+- Deterministic subgroup sorting and stable record selection
 - Centralized theme resources
-- Primary keyboard/accessibility metadata
+- Keyboard/focus and accessibility metadata
 
-The legacy `PulseInspector` WinForms project remains in the solution until the final Core extraction and dependency cleanup are complete. Therefore this branch is a migration stage, not yet the final WinForms-free Release 1.0 packaging.
+The legacy WinForms application shell has been retired from the active solution on the migration branch. The current branch is therefore focused on WPF Release 1.0 stabilization rather than a hybrid WindowsFormsHost migration.
 
 ## Design principles
 
-- WinForms legacy UI without the Designer
-- Native WPF/MVVM for the migration target
+- Native WPF/MVVM for the application UI
 - Pure C# source
 - Deterministic feature ordering
 - Group-based inspection
 - Baseline estimation that does not depend on the pulse being at the beginning of the record
 - Positive-current trapezoidal charge integration
-- Six statistical features for the Mahalanobis model:
+- Five independent statistical features for the Mahalanobis model:
   - Charge
   - FWHM
   - Noise
   - Peak
   - Rise Time
+- Diagnostic feature:
   - Z-score
 - Derived inspection outputs:
   - Mahalanobis Distance
   - Threshold
-- Chi-square threshold at configurable confidence; Release 1.0 defaults to 99.9% with df=6 and threshold 22.457744
+- Mahalanobis covariance is calculated from the five independent statistical features. Z-score is derived from Peak and is retained for diagnostics/export; it is not an independent covariance dimension.
 
 ## Architecture
-
-The migration target is:
 
 ```text
 WPF View
@@ -60,12 +58,12 @@ ViewModel
   ↓
 Application Facade / Use Case Boundary
   ↓
-Existing Services
+Core Services
   ↓
-Models
+Core Models
 ```
 
-The WPF presentation layer does not duplicate feature extraction, baseline correction, charge integration, covariance, Mahalanobis, or threshold calculations. Existing services remain the source of truth during the incremental migration.
+The WPF presentation layer does not duplicate feature extraction, baseline correction, charge integration, covariance, Mahalanobis, or threshold calculations. Core/Application services remain the source of truth.
 
 ## CSV import modes
 
@@ -103,18 +101,20 @@ A measurement group represents multiple waveforms belonging to the same physical
 
 Training is performed from normal groups, not individual waveforms. The covariance model therefore represents variation between inspection groups. During inspection, the complete group is classified once using its aggregated feature vector.
 
-`GroupData` enforces equal waveform length within a group, keeps waveform and feature data together, and provides mean-waveform and mean-feature aggregation. `GroupInspectionService` owns the group-level training and inspection flow.
-
 ## Release 1.0 feature ordering
 
-The complete display order is deterministic and alphabetic by feature name:
+The complete display/export order is deterministic and alphabetic by feature name:
 
 `Charge, FWHM, MahalanobisDistance, Noise, Peak, RiseTime, Threshold, ZScore`
 
-The Mahalanobis calculation intentionally uses only the six statistical features. Mahalanobis Distance and Threshold are derived outputs and are not included in the covariance model.
+The five independent statistical features used by the Mahalanobis model follow:
+
+`Charge, FWHM, Noise, Peak, RiseTime`
+
+Z-score is a diagnostic derived from Peak and is intentionally excluded from the covariance vector.
 
 ## Verification
 
-The existing executable regression suite covers feature ordering, group aggregation, CSV loading, feature extraction, training validation, Mahalanobis inspection, synthetic defect detection, feature deviations, and the legacy WinForms smoke test. The WPF/application boundary is additionally exercised by an application-facade regression test.
+The executable regression suite covers feature ordering, group aggregation, CSV loading, feature extraction, training validation, Mahalanobis inspection, synthetic defect detection, feature deviations, CSV export, subgroup selection, and the Application facade.
 
-A successful GitHub Actions run on the current migration head is still required before declaring the migration release-ready. Local build verification may be unavailable in environments without network access to restore the .NET SDK dependencies.
+The GitHub Actions workflow builds the complete solution on Windows and runs the algorithm regression suite. A successful current-head run is required before declaring the migration release-ready. Manual Windows verification is still required for WPF rendering, DPI, keyboard/focus, CSV import/export, and visual states.
