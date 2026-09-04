@@ -2,20 +2,24 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:PulseInspector.Wpf.Views"
-        Title="PulseInspector" Width="1500" Height="900" MinWidth="1100" MinHeight="700">
+        Title="PulseInspector" Width="1500" Height="900" MinWidth="1100" MinHeight="700"
+        WindowStartupLocation="CenterScreen">
+    <Window.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding InspectCommand}"/>
+    </Window.InputBindings>
     <Grid Margin="16">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <DockPanel Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                <Button Content="Add Group..." Command="{Binding AddGroupCommand}" AutomationProperties.Name="Add waveform group"/>
-                <Button Content="Add Groups by Rows..." Command="{Binding AddRowsCommand}" AutomationProperties.Name="Add groups from row CSV"/>
-                <Button Content="Training" Click="Training_Click" AutomationProperties.Name="Open training validation"/>
-                <Button Content="Train" Command="{Binding TrainCommand}" AutomationProperties.Name="Train model"/>
-                <Button Content="Inspect" Command="{Binding InspectCommand}" AutomationProperties.Name="Inspect selected group"/>
-                <Button Content="Export CSV..." Command="{Binding ExportCommand}" AutomationProperties.Name="Export inspection result to CSV"/>
-                <Button Content="Settings" Click="Settings_Click" AutomationProperties.Name="Open settings"/>
-                <Button Content="About" Click="About_Click" AutomationProperties.Name="About PulseInspector"/>
-                <Button Content="Clear" Command="{Binding ClearGroupsCommand}" AutomationProperties.Name="Clear groups"/>
+                <Button Content="Add Group..." Command="{Binding AddGroupCommand}" AutomationProperties.Name="Add waveform group" ToolTip="Load waveform files into a group" Margin="4,0"/>
+                <Button Content="Add Groups by Rows..." Command="{Binding AddRowsCommand}" AutomationProperties.Name="Add groups from row CSV" ToolTip="Load each CSV row as a subgroup" Margin="4,0"/>
+                <Button Content="Training" Click="Training_Click" AutomationProperties.Name="Open training validation" ToolTip="Validate training data" Margin="4,0"/>
+                <Button Content="Train" Command="{Binding TrainCommand}" AutomationProperties.Name="Train model" ToolTip="Train the inspection model" Margin="4,0"/>
+                <Button Content="Inspect" Command="{Binding InspectCommand}" AutomationProperties.Name="Inspect selected group" ToolTip="Inspect the selected group (F5)" Margin="4,0"/>
+                <Button Content="Export CSV..." Command="{Binding ExportCommand}" AutomationProperties.Name="Export inspection result to CSV" ToolTip="Export the current inspection result" Margin="4,0"/>
+                <Button Content="Settings" Click="Settings_Click" AutomationProperties.Name="Open settings" Margin="4,0"/>
+                <Button Content="About" Click="About_Click" AutomationProperties.Name="About PulseInspector" Margin="4,0"/>
+                <Button Content="Clear" Command="{Binding ClearGroupsCommand}" AutomationProperties.Name="Clear groups" ToolTip="Remove all loaded groups" Margin="4,0"/>
             </StackPanel>
             <TextBlock Text="PulseInspector" FontSize="24" FontWeight="SemiBold" VerticalAlignment="Center"/>
         </DockPanel>
