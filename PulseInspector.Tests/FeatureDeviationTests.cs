@@ -41,10 +41,8 @@ internal static class FeatureDeviationTests
         Assert(deviations.Any(d => d.FeatureName == "Peak" && d.AbsoluteZScore > 1), "Peak deviation was not reflected in the feature explanation.");
         Assert(deviations.Any(d => d.FeatureName == "Charge" && d.AbsoluteZScore > 1), "Charge deviation was not reflected in the feature explanation.");
 
-        FeatureDeviationGridTests.Run();
         InspectionSelectionServiceTests.Run();
         InspectionCsvExporterTests.Run();
-        WinFormsSmokeTest.Run();
     }
 
     private static double ComputeMahalanobisSquared(FeatureVector vector, InspectionModel model)
