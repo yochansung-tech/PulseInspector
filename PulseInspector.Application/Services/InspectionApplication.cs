@@ -13,6 +13,7 @@ public sealed class InspectionApplication : IInspectionApplication
     private readonly SubgroupInspectionService _subgroupService;
     private readonly FeatureDeviationService _deviationService;
     private readonly TrainingValidationService _trainingValidationService;
+    private readonly InspectionCsvExporter _inspectionCsvExporter;
 
     public InspectionApplication(
         FeatureExtractor? featureExtractor = null,
@@ -21,7 +22,8 @@ public sealed class InspectionApplication : IInspectionApplication
         GroupInspectionService? groupService = null,
         SubgroupInspectionService? subgroupService = null,
         FeatureDeviationService? deviationService = null,
-        TrainingValidationService? trainingValidationService = null)
+        TrainingValidationService? trainingValidationService = null,
+        InspectionCsvExporter? inspectionCsvExporter = null)
     {
         _featureExtractor = featureExtractor ?? new FeatureExtractor();
         _csvLoader = csvLoader ?? new CsvWaveformLoader();
@@ -30,6 +32,7 @@ public sealed class InspectionApplication : IInspectionApplication
         _subgroupService = subgroupService ?? new SubgroupInspectionService();
         _deviationService = deviationService ?? new FeatureDeviationService();
         _trainingValidationService = trainingValidationService ?? new TrainingValidationService();
+        _inspectionCsvExporter = inspectionCsvExporter ?? new InspectionCsvExporter();
     }
 
     public FeatureVector ExtractFeatures(IReadOnlyList<double> samples, double sampleIntervalSeconds)
@@ -77,6 +80,7 @@ public sealed class InspectionApplication : IInspectionApplication
     public GroupInspectionResult Inspect(GroupData group, InspectionModel model, GroupDecisionPolicy decisionPolicy) => _groupService.Inspect(group, model, decisionPolicy);
     public IReadOnlyList<SubgroupInspectionResult> InspectSubgroups(GroupData group, InspectionModel model) => _subgroupService.Inspect(group, model);
     public IReadOnlyList<FeatureDeviation> AnalyzeDeviations(FeatureVector vector, InspectionModel model) => _deviationService.Analyze(vector, model);
+    public void ExportInspectionResult(string filePath, GroupInspectionResult result, IReadOnlyList<SubgroupInspectionResult>? subgroupResults = null) => _inspectionCsvExporter.ExportGroupResult(filePath, result, subgroupResults);
 
     private static void ValidateInterval(double value)
     {
