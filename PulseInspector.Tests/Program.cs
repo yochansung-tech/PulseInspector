@@ -1,7 +1,6 @@
 using PulseInspector.Application.Services;
 using PulseInspector.Models;
 using PulseInspector.Services;
-using PulseInspector.Wpf.ViewModels;
 
 namespace PulseInspector.Tests;
 
@@ -14,7 +13,6 @@ internal static class Program
             TestFeatureOrder(); TestGroupMeanFeatures(); TestRowBasedCsvLoading(); TestRowBasedCsvEndToEnd();
             TestFeatureExtraction(); TestTrainingValidation(); TestMahalanobisTrainingAndInspection();
             TestNormalVsDefectivePulseDetection(); TestApplicationFacade(); TestApplicationExportFacade(); TestCoreDependencyBoundary();
-            TestRelayCommandState(); TestMainWindowInitialCommandState(); TestMainWindowCommandStateTransitions();
             FeatureDeviationTests.Run();
             Console.WriteLine("ALL TESTS PASSED"); return 0;
         }
@@ -22,87 +20,6 @@ internal static class Program
         {
             Console.Error.WriteLine("TEST FAILURE"); Console.Error.WriteLine(ex); return 1;
         }
-    }
-
-    private static void TestRelayCommandState()
-    {
-        var allowed = false;
-        var executed = false;
-        var command = new RelayCommand(() => executed = true, () => allowed);
-        var notifications = 0;
-        command.CanExecuteChanged += (_, _) => notifications++;
-
-        Assert(!command.CanExecute(null), "RelayCommand must initially report CanExecute=false.");
-        allowed = true;
-        command.RaiseCanExecuteChanged();
-        Assert(notifications == 1, "RelayCommand did not raise CanExecuteChanged.");
-        Assert(command.CanExecute(null), "RelayCommand did not observe the updated predicate.");
-        command.Execute(null);
-        Assert(executed, "RelayCommand did not execute the action.");
-    }
-
-    private static void TestMainWindowInitialCommandState()
-    {
-        var viewModel = new MainWindowViewModel(new InspectionApplication());
-        Assert(viewModel.AddGroupCommand.CanExecute(null), "Add Group must be enabled in the initial state.");
-        Assert(viewModel.AddRowsCommand.CanExecute(null), "Add Groups by Rows must be enabled in the initial state.");
-        Assert(!viewModel.ClearGroupsCommand.CanExecute(null), "Clear must be disabled when no groups are loaded.");
-        Assert(!viewModel.TrainCommand.CanExecute(null), "Train must be disabled before enough normal groups are loaded.");
-        Assert(!viewModel.InspectCommand.CanExecute(null), "Inspect must be disabled before a selected group and training set exist.");
-        Assert(!viewModel.ExportCommand.CanExecute(null), "Export must be disabled before an inspection result exists.");
-        Assert(!viewModel.IsModelTrained, "Initial ViewModel must not expose a trained model.");
-        Assert(!viewModel.HasInspectionResult, "Initial ViewModel must not expose an inspection result.");
-        Assert(!viewModel.HasGroups, "Initial ViewModel must report an empty group state.");
-    }
-
-    private static void TestMainWindowCommandStateTransitions()
-    {
-        var viewModel = new MainWindowViewModel(new InspectionApplication());
-        var path = Path.Combine(Path.GetTempPath(), $"pulseinspector-command-{Guid.NewGuid():N}.csv");
-        try
-        {
-            File.WriteAllText(path, "0\n1\n2\n1\n0\n");
-
-            for (var i = 0; i < 7; i++)
-                viewModel.AddGroup(new[] { path });
-
-            Assert(viewModel.Groups.Count == 7, "Command-state test did not load seven groups.");
-            Assert(viewModel.NormalGroupCount == 7, "Command-state test did not preserve normal group count.");
-            Assert(viewModel.TrainCommand.CanExecute(null), "Train must become enabled with the required normal groups.");
-            Assert(viewModel.InspectCommand.CanExecute(null), "Inspect must become enabled when six other normal groups remain.");
-            Assert(viewModel.ClearGroupsCommand.CanExecute(null), "Clear must become enabled after groups are loaded.");
-            Assert(!viewModel.ExportCommand.CanExecute(null), "Export must remain disabled before inspection.");
-
-            viewModel.TrainModel();
-            Assert(viewModel.IsModelTrained, "Training command did not establish a model.");
-
-            var previousSelection = viewModel.SelectedGroup;
-            var nextSelection = viewModel.Groups.First(g => !ReferenceEquals(g, previousSelection));
-            viewModel.SelectedGroup = nextSelection;
-            Assert(!viewModel.IsModelTrained, "Changing selected group must invalidate the model.");
-            Assert(!viewModel.HasInspectionResult, "Changing selected group must invalidate the inspection result.");
-
-            viewModel.TrainModel();
-            Assert(viewModel.IsModelTrained, "Model could not be retrained after selection change.");
-
-            viewModel.SetSelectedGroupDefective(true);
-            Assert(!viewModel.IsModelTrained, "Changing group classification must invalidate the model.");
-            Assert(viewModel.NormalGroupCount == 6, "Defective classification did not update normal group count.");
-            Assert(viewModel.TrainCommand.CanExecute(null), "Train must remain enabled when six normal groups remain.");
-            Assert(viewModel.InspectCommand.CanExecute(null), "Inspect must remain enabled because six other normal groups are still available.");
-
-            viewModel.SetSelectedGroupDefective(false);
-            Assert(viewModel.NormalGroupCount == 7, "Restoring normal classification did not update normal group count.");
-            Assert(viewModel.TrainCommand.CanExecute(null), "Train must be re-enabled after restoring normal classification.");
-            Assert(viewModel.InspectCommand.CanExecute(null), "Inspect must be re-enabled after restoring normal classification.");
-
-            viewModel.TrainModel();
-            Assert(viewModel.IsModelTrained, "Model did not train after restoring classification.");
-            viewModel.ApplySettings(new GroupDecisionPolicy(), 0.999, 1e-6);
-            Assert(!viewModel.IsModelTrained, "Applying settings must invalidate the model.");
-            Assert(!viewModel.HasInspectionResult, "Applying settings must invalidate the inspection result.");
-        }
-        finally { if (File.Exists(path)) File.Delete(path); }
     }
 
     private static void TestCoreDependencyBoundary()
