@@ -7,11 +7,11 @@
                 <ResourceDictionary Source="Themes/Colors.xaml"/>
                 <ResourceDictionary Source="Themes/Controls.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+            <Style TargetType="{x:Type Window}">
+                <Setter Property="FontFamily" Value="Segoe UI" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+            </Style>
         </ResourceDictionary>
-        <Style TargetType="{x:Type Window}">
-            <Setter Property="FontFamily" Value="Segoe UI" />
-            <Setter Property="FontSize" Value="14" />
-            <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
-        </Style>
     </Application.Resources>
 </Application>
