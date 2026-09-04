@@ -88,11 +88,13 @@ internal static class Program
             viewModel.SetSelectedGroupDefective(true);
             Assert(!viewModel.IsModelTrained, "Changing group classification must invalidate the model.");
             Assert(viewModel.NormalGroupCount == 6, "Defective classification did not update normal group count.");
-            Assert(!viewModel.TrainCommand.CanExecute(null), "Train must be disabled when only five? normal groups remain after selection exclusion.");
+            Assert(viewModel.TrainCommand.CanExecute(null), "Train must remain enabled when six normal groups remain.");
+            Assert(!viewModel.InspectCommand.CanExecute(null), "Inspect must be disabled when the selected group is defective and cannot be inspected as a normal target.");
 
             viewModel.SetSelectedGroupDefective(false);
             Assert(viewModel.NormalGroupCount == 7, "Restoring normal classification did not update normal group count.");
             Assert(viewModel.TrainCommand.CanExecute(null), "Train must be re-enabled after restoring normal classification.");
+            Assert(viewModel.InspectCommand.CanExecute(null), "Inspect must be re-enabled after restoring normal classification.");
 
             viewModel.TrainModel();
             Assert(viewModel.IsModelTrained, "Model did not train after restoring classification.");
