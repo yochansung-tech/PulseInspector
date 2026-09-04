@@ -69,11 +69,12 @@ internal static class Program
 
             application.ExportInspectionResult(path, result, new[] { subgroup });
             var lines = File.ReadAllLines(path);
-            Assert(lines.Length == 4, "Application export facade produced an unexpected number of CSV lines.");
+            Assert(lines.Length == 5, "Application export facade produced an unexpected number of CSV lines.");
             Assert(lines[0].StartsWith("RecordType,GroupId,IsDefect,RecordCount,"), "Application export facade produced an invalid group header.");
             Assert(lines[1].StartsWith("Group,group-1,True,3,"), "Application export facade produced an invalid group row.");
             Assert(lines[2].Length == 0, "Application export facade must preserve the blank separator line.");
-            Assert(lines[3].StartsWith("Subgroup,1,\"row,1\",True,"), "Application export facade did not preserve CSV quoting.");
+            Assert(lines[3].StartsWith("RecordType,Index,SourceName,IsDefect,"), "Application export facade produced an invalid subgroup header.");
+            Assert(lines[4].StartsWith("Subgroup,1,\"row,1\",True,"), "Application export facade did not preserve CSV quoting.");
             Assert(lines[0].Contains(",Charge,FWHM,Noise,Peak,RiseTime,ZScore"), "Application export facade changed feature column order.");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
