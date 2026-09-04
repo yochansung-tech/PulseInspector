@@ -12,6 +12,7 @@ public sealed class InspectionApplication : IInspectionApplication
     private readonly GroupInspectionService _groupService;
     private readonly SubgroupInspectionService _subgroupService;
     private readonly FeatureDeviationService _deviationService;
+    private readonly TrainingValidationService _trainingValidationService;
 
     public InspectionApplication(
         FeatureExtractor? featureExtractor = null,
@@ -19,7 +20,8 @@ public sealed class InspectionApplication : IInspectionApplication
         CsvRowWaveformLoader? csvRowLoader = null,
         GroupInspectionService? groupService = null,
         SubgroupInspectionService? subgroupService = null,
-        FeatureDeviationService? deviationService = null)
+        FeatureDeviationService? deviationService = null,
+        TrainingValidationService? trainingValidationService = null)
     {
         _featureExtractor = featureExtractor ?? new FeatureExtractor();
         _csvLoader = csvLoader ?? new CsvWaveformLoader();
@@ -27,6 +29,7 @@ public sealed class InspectionApplication : IInspectionApplication
         _groupService = groupService ?? new GroupInspectionService();
         _subgroupService = subgroupService ?? new SubgroupInspectionService();
         _deviationService = deviationService ?? new FeatureDeviationService();
+        _trainingValidationService = trainingValidationService ?? new TrainingValidationService();
     }
 
     public FeatureVector ExtractFeatures(IReadOnlyList<double> samples, double sampleIntervalSeconds)
@@ -61,6 +64,13 @@ public sealed class InspectionApplication : IInspectionApplication
             groups.Add(group);
         }
         return groups;
+    }
+
+    public TrainingValidationResult ValidateTraining(IEnumerable<GroupData> normalGroups)
+    {
+        ArgumentNullException.ThrowIfNull(normalGroups);
+        var vectors = normalGroups.Select(g => g.MeanFeatures() ?? throw new InvalidOperationException($"Group '{g.Id}' contains no valid features."));
+        return _trainingValidationService.Validate(vectors);
     }
 
     public InspectionModel Train(IEnumerable<GroupData> normalGroups, double confidence) => _groupService.Train(normalGroups, confidence);
