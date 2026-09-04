@@ -1,0 +1,11 @@
+<UserControl x:Class="PulseInspector.Wpf.Views.HistogramView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Padding="10" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Grid>
+            <Canvas x:Name="PlotCanvas" Background="Transparent"/>
+            <TextBlock x:Name="EmptyText" Text="No subgroup distribution" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}"/>
+            <TextBlock Text="Mahalanobis distance distribution" VerticalAlignment="Top" FontWeight="SemiBold"/>
+        </Grid>
+    </Border>
+</UserControl>
