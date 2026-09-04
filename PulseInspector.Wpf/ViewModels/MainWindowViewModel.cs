@@ -12,6 +12,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly List<GroupData> _groupModels = new();
     private InspectionModel? _model;
     private GroupViewModel? _selectedGroup;
+    private SubgroupResultViewModel? _selectedSubgroup;
     private string _statusText = "WPF migration foundation ready";
     private double _confidence = 0.999;
     private double _sampleIntervalSeconds = 2.56e-6 / 64.0;
@@ -43,8 +44,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             if (ReferenceEquals(_selectedGroup, value)) return;
             _selectedGroup = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedGroupIsDefective));
             ShowSelectedGroup();
             RaiseCommandStates();
+        }
+    }
+
+    public bool SelectedGroupIsDefective
+    {
+        get => SelectedGroup?.IsDefective ?? false;
+        set => SetSelectedGroupDefective(value);
+    }
+
+    public SubgroupResultViewModel? SelectedSubgroup
+    {
+        get => _selectedSubgroup;
+        set
+        {
+            if (ReferenceEquals(_selectedSubgroup, value)) return;
+            _selectedSubgroup = value;
+            OnPropertyChanged();
+            ShowSelectedSubgroup();
         }
     }
 
@@ -100,10 +120,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             SetStatus($"Added Group {group.Id[..Math.Min(8, group.Id.Length)]}: {group.RecordCount} waveform(s)");
             RaiseCommandStates();
         }
-        catch (Exception ex)
-        {
-            SetStatus($"Group load failed: {ex.Message}");
-        }
+        catch (Exception ex) { SetStatus($"Group load failed: {ex.Message}"); }
     }
 
     private void AddGroup() => SetStatus("Use the file picker to add a group.");
@@ -115,7 +132,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         Features.Clear();
         Subgroups.Clear();
         _model = null;
+        _selectedGroup = null;
+        _selectedSubgroup = null;
         Waveform = Array.Empty<double>();
+        OnPropertyChanged(nameof(SelectedGroup));
+        OnPropertyChanged(nameof(SelectedSubgroup));
+        OnPropertyChanged(nameof(SelectedGroupIsDefective));
         SetStatus("Groups cleared");
         RaiseCommandStates();
     }
@@ -124,6 +146,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         Features.Clear();
         Subgroups.Clear();
+        _selectedSubgroup = null;
+        OnPropertyChanged(nameof(SelectedSubgroup));
         _model = null;
         if (SelectedGroup is null)
         {
@@ -147,11 +171,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _model = _application.Train(normalGroups, Confidence);
             SetStatus($"Model trained: {normalGroups.Length} normal groups, threshold={_model.Threshold:F6}");
         }
-        catch (Exception ex)
-        {
-            _model = null;
-            SetStatus($"Training failed: {ex.Message}");
-        }
+        catch (Exception ex) { _model = null; SetStatus($"Training failed: {ex.Message}"); }
     }
 
     private void Inspect()
@@ -163,22 +183,38 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _model = _application.Train(trainingGroups, Confidence);
             var result = _application.Inspect(SelectedGroup.Model, _model, new GroupDecisionPolicy());
             SetFeatures(result.Features);
-            var subgroupResults = _application.InspectSubgroups(SelectedGroup.Model, _model);
-            Subgroups.Clear();
-            foreach (var row in subgroupResults)
-                Subgroups.Add(new SubgroupResultViewModel(row.Index, row.SourceName, row.MahalanobisDistance, row.Threshold, row.IsDefect));
+            PopulateSubgroups(SelectedGroup.Model);
             SetStatus($"Group {result.GroupId[..Math.Min(8, result.GroupId.Length)]}: {(result.IsDefect ? "DEFECT" : "NORMAL")} | MD={result.MahalanobisDistance:F6} | Threshold={result.Threshold:F6}");
         }
-        catch (Exception ex)
-        {
-            SetStatus($"Inspection failed: {ex.Message}");
-        }
+        catch (Exception ex) { SetStatus($"Inspection failed: {ex.Message}"); }
+    }
+
+    private void PopulateSubgroups(GroupData group)
+    {
+        Subgroups.Clear();
+        _selectedSubgroup = null;
+        OnPropertyChanged(nameof(SelectedSubgroup));
+        if (_model is null) return;
+        foreach (var row in _application.InspectSubgroups(group, _model))
+            Subgroups.Add(new SubgroupResultViewModel(row.Index, row.SourceName, row.MahalanobisDistance, row.Threshold, row.IsDefect));
+    }
+
+    private void ShowSelectedSubgroup()
+    {
+        if (SelectedGroup is null || SelectedSubgroup is null) return;
+        var recordIndex = SelectedSubgroup.Index - 1;
+        if (recordIndex < 0 || recordIndex >= SelectedGroup.Model.Records.Count) return;
+        var record = SelectedGroup.Model.Records[recordIndex];
+        Waveform = record.Samples;
+        SetFeatures(record.Features);
+        SetStatus($"Selected subgroup #{SelectedSubgroup.Index}: {SelectedSubgroup.SourceName} | {(SelectedSubgroup.IsDefect ? "DEFECT" : "NORMAL")}");
     }
 
     public void SetSelectedGroupDefective(bool value)
     {
         if (SelectedGroup is null) return;
         SelectedGroup.IsDefective = value;
+        OnPropertyChanged(nameof(SelectedGroupIsDefective));
         OnPropertyChanged(nameof(NormalGroupCount));
         RaiseCommandStates();
     }
