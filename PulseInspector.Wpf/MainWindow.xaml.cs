@@ -68,8 +68,9 @@ public partial class MainWindow : Window
         _lastSortMember = member;
         _lastSortDirection = direction;
 
-        var view = CollectionViewSource.GetDefaultCollectionView(ViewModel?.Subgroups);
-        if (view is null) return;
+        var source = ViewModel?.Subgroups;
+        if (source is null) return;
+        var view = CollectionViewSource.GetDefaultView(source);
         using (view.DeferRefresh())
         {
             view.SortDescriptions.Clear();
