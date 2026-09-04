@@ -8,4 +8,13 @@
     <RootNamespace>PulseInspector</RootNamespace>
     <AssemblyName>PulseInspector</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Models\**\*.cs" />
+    <Compile Remove="Services\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PulseInspector.Core\PulseInspector.Core.csproj" />
+  </ItemGroup>
 </Project>
